@@ -37,8 +37,8 @@ test('Migración, identidad, importación, reportes, usuarios y entrega SMTP', {
       const r = await fetch(base + '/api/' + p, { method, signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', cookie: auth }, body: body ? JSON.stringify(body) : undefined });
       return { status: r.status, data: r.headers.get('Content-Type')?.includes('application/json') ? await r.json() : Buffer.from(await r.arrayBuffer()), cookie: r.headers.get('set-cookie')?.split(';')[0] };
     };
-    assert.equal((await request('status')).data.version, '2.0.0');
-    assert.equal((await request('setup', 'POST', { name: 'Administrador', email: 'admin@example.test', password: 'Password12345!' })).status, 201);
+    assert.equal((await request('status')).data.version, '2.1.0');
+    assert.equal((await request('setup', 'POST', { name: 'Administrador', email: 'admin@example.test', password: 'Password12345!', recoveryEmail: 'Backup@EXAMPLE.test', recoveryPhone: '+52 555 123 4567' })).status, 201);
     cookie = (await request('login', 'POST', { email: 'admin@example.test', password: 'Password12345!' })).cookie;
     const image = 'data:image/png;base64,' + (await sharp({ create: { width: 48, height: 48, channels: 4, background: '#245d4a' } }).png().toBuffer()).toString('base64');
     const config = { name: 'Iglesia de Prueba', address: 'Dirección de prueba', phone: '5551234567', email: 'contacto@example.test', schedule: 'Domingos 10:00', logo: image, cover: image };
@@ -64,9 +64,16 @@ test('Migración, identidad, importación, reportes, usuarios y entrega SMTP', {
     assert.equal((await request('donations', 'POST', { date: '2026-10-21', amount: 100.25, concept: 'Ofrenda', method: 'Efectivo' })).status, 201);
     const report = await request('reports/donations?from=2026-10-01&to=2026-10-31'); assert.equal(report.data.total, 100.25); assert.equal(report.data.rows[0][4], 'Anónima');
     const pdf = await request('reports/members/pdf'); assert.equal(pdf.status, 200); assert.equal(pdf.data.subarray(0, 4).toString(), '%PDF');
-    const admin = (await request('users')).data[0]; assert.equal((await request('users/' + admin.id, 'PUT', { ...admin, active: false })).status, 400);
-    assert.equal((await request('users', 'POST', { name: 'Coordinador', email: 'coord@example.test', password: 'Password12345!', role: 'coordinador' })).status, 201);
+    const admin = (await request('users')).data[0]; assert.equal(admin.recoveryEmail, 'backup@example.test'); assert.equal(admin.recoveryPhone, '+52 555 123 4567'); assert.equal((await request('users/' + admin.id, 'PUT', { ...admin, active: false })).status, 400);
+    assert.equal((await request('users', 'POST', { name: 'Inválido', email: 'invalid@example.test', password: 'Password12345!', role: 'secretario', recoveryEmail: 'mal' })).status, 400);
+    assert.equal((await request('users', 'POST', { name: 'Coordinador', email: 'coord@example.test', password: 'Password12345!', role: 'coordinador', recoveryEmail: 'coord-backup@example.test', recoveryPhone: '5551234567' })).status, 201);
     const coordinator = (await request('users')).data[1], session = (await request('login', 'POST', { email: 'coord@example.test', password: 'Password12345!' })).cookie;
+    assert.equal(coordinator.recoveryEmail, 'coord-backup@example.test');
+    assert.equal((await request('account/recovery', 'PUT', { current: 'incorrecta', recoveryEmail: 'new@example.test' }, session)).status, 403);
+    assert.equal((await request('account/recovery', 'PUT', { current: 'Password12345!', recoveryPhone: 'abc' }, session)).status, 400);
+    assert.equal((await request('account/recovery', 'PUT', { current: 'Password12345!', recoveryEmail: 'New@EXAMPLE.test', recoveryPhone: '+52 555 765 4321' }, session)).status, 200);
+    assert.equal((await request('me', 'GET', undefined, session)).data.recoveryEmail, 'new@example.test');
+    assert.equal((await request('me')).data.recoveryEmail, 'backup@example.test');
     assert.equal((await request('reports/donations', 'GET', undefined, session)).status, 403);
     assert.equal((await request('members/import/preview', 'POST', { type: 'csv', content: '' }, session)).status, 403);
     assert.equal((await request('users/' + coordinator.id, 'PUT', { ...coordinator, role: 'secretario' })).status, 200);
@@ -76,7 +83,14 @@ test('Migración, identidad, importación, reportes, usuarios y entrega SMTP', {
     assert.equal((await request('me', 'GET', undefined, secretary)).status, 401);
     assert.equal((await request('login', 'POST', { email: 'coord@example.test', password: 'Password12345!' })).status, 401);
     assert.equal((await request('forgot', 'POST', { email: 'admin@example.test' })).status, 200);
-    await mailReceived; const decoded = email.replace(/=\r\n/g, '').replace(/=3D/g, '='), token = /restablecer=([a-f0-9]{64})/.exec(decoded)?.[1]; assert.ok(token); assert.ok(decoded.includes('To: admin@example.test'));
+    await mailReceived;
+    const firstMail = email.replace(/=\r\n/g, '').replace(/=3D/g, '='), oldToken = /restablecer=([a-f0-9]{64})/.exec(firstMail)?.[1];
+    assert.ok(oldToken); assert.ok(firstMail.includes('To: backup@example.test')); assert.ok(!firstMail.includes('To: admin@example.test'));
+    assert.equal((await request('account/recovery', 'PUT', { current: 'Password12345!', recoveryEmail: 'second-backup@example.test', recoveryPhone: '' })).status, 200);
+    assert.equal((await request('me')).data.recoveryPhone, '');
+    assert.equal((await request('reset', 'POST', { token: oldToken, password: 'ChangedPassword123!' })).status, 400);
+    assert.equal((await request('forgot', 'POST', { email: 'admin@example.test' })).status, 200);
+    const decoded = email.replace(/=\r\n/g, '').replace(/=3D/g, '='), token = /restablecer=([a-f0-9]{64})/.exec(decoded)?.[1]; assert.ok(token); assert.ok(decoded.includes('To: second-backup@example.test'));
     assert.equal((await request('reset', 'POST', { token, password: 'ChangedPassword123!' })).status, 200);
     assert.equal((await request('me')).status, 401);
   } finally {

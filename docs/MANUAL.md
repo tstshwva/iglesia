@@ -30,11 +30,19 @@ Seleccionar Importar Excel / CSV, cargar el archivo y pulsar Revisar archivo. M�
 
 ## Usuarios
 
-Administrador: Usuarios → Registrar o Editar. Cambiar nombre, correo, rol y estado. En edición, dejar la contraseña vacía para conservarla o establecer una nueva de al menos 12 caracteres. Cambiar un rol, desactivar o restablecer la contraseña revoca las sesiones del usuario. No se permite dejar a la iglesia sin administrador activo. Las cuentas inactivas no pueden iniciar sesión.
+Administrador: Usuarios → Registrar o Editar. Cambiar nombre, correo principal, correo de recuperación opcional, teléfono de recuperación opcional, rol y estado. En edición, dejar la contraseña vacía para conservarla o establecer una nueva de al menos 12 caracteres. Cambiar un rol, desactivar o restablecer la contraseña revoca las sesiones del usuario. No se permite dejar a la iglesia sin administrador activo. Las cuentas inactivas no pueden iniciar sesión.
 
 ## Recuperar contraseña
 
-Olvidé mi contraseña → indicar correo. Con SMTP configurado se recibe un enlace y código. El enlace abre el formulario de restablecimiento. El token vence a los 30 minutos y se utiliza una sola vez. Cambiar la clave invalida sesiones existentes. En desarrollo sin SMTP el código se muestra en la terminal; en producción no se imprime. Consultar Operación para configurar el correo real.
+Olvidé mi contraseña → indicar el correo principal de la cuenta. El enlace se envía al correo de recuperación si está definido; de lo contrario al principal. Con SMTP configurado se recibe un enlace y código. El enlace abre el formulario de restablecimiento. El token vence a los 30 minutos y se utiliza una sola vez. Cambiar la clave invalida sesiones existentes. En desarrollo sin SMTP el código se muestra en la terminal; en producción no se imprime. Consultar Operación para configurar el correo real.
+
+## Mis datos de recuperación
+
+Al crear una cuenta, incluido el primer administrador, se puede añadir un correo alternativo y teléfono. No es obligatorio. Después, cada usuario abre **Recuperación** en la cabecera para ver o actualizar sus propios datos, confirmando su contraseña actual. El administrador también puede editarlos en Usuarios. Un campo vacío elimina el contacto alternativo.
+
+Se valida el formato del correo y un teléfono de 7 a 15 dígitos, con prefijo de país opcional. Revisar que sean correctos y que se tenga acceso al buzón alternativo. Cambiar los datos invalida enlaces de recuperación emitidos previamente. El teléfono permite contacto de apoyo con el administrador: no envía códigos ni restablece la contraseña por sí solo. No se pide ni se almacena la contraseña del correo alternativo.
+
+Elegir un destinatario de recuperación no configura el servidor que envía correos. Sigue siendo necesario SMTP o el servicio de envío de la iglesia.
 
 ## Eventos y ministerios
 

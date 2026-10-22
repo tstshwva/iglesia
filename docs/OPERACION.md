@@ -36,7 +36,7 @@ Copiar .env.example a .env y ajustar valores. El servidor y el iniciador lo carg
 
 Configurar SMTP, remitente y APP_URL. En puerto 465 se utiliza TLS desde el inicio; en 587 se solicita STARTTLS. No se deshabilita la validación de certificados. En producción se exige TLS. Reiniciar el servidor y revisar Configuración → Recuperación por correo. El indicador confirma que hay parámetros, no garantiza por sí solo la entrega al destinatario.
 
-El mensaje contiene enlace al formulario y código. Token de 30 minutos, un uso, almacenado como hash. La API responde de forma genérica para no revelar cuentas y registra fallos sin credenciales ni tokens. Sin proveedor, solo en desarrollo se imprime el código para pruebas. No se envió correo real durante la validación: se usó un receptor SMTP local.
+El mensaje contiene enlace al formulario y código. Se envía al correo de recuperación guardado en la cuenta; si no existe, al principal. El teléfono no es un canal automático de envío. Token de 30 minutos, un uso, almacenado como hash. La API responde de forma genérica para no revelar cuentas y registra fallos sin credenciales ni tokens. Sin proveedor, solo en desarrollo se imprime el código para pruebas. No se envió correo real durante la validación: se usó un receptor SMTP local.
 
 ## Respaldar y restaurar
 

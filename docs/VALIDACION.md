@@ -23,3 +23,7 @@ No se ha probado el correo de la iglesia con credenciales reales, ni un desplieg
 ## Revisión manual pendiente en equipo del usuario
 
 Acceso → subir logo/portada → verificar identidad → registro rápido y Guardar y agregar otro → duplicados → importar plantilla → editar/desactivar usuario → registrar/cancelar evento → asistencia → ministerio → aportaciones → comunicados → filtros y descargas → pantalla pequeña. Capturar esas pantallas sin información personal para completar el manual ilustrado.
+
+## Verificación 2.1: contactos de recuperación
+
+Alta con correo alternativo/teléfono, migración de cuentas anteriores, rechazo de formatos inválidos, actualización personal con contraseña actual, aislamiento de datos por usuario, entrega SMTP al alternativo, revocación de enlaces al cambiar contactos y uso del correo principal si no hay alternativo. Todos los correos de prueba usan buzones ficticios y un receptor SMTP local.

@@ -1,4 +1,4 @@
-# Siloé - Iglesia Presbiteriana · versión 2
+# Siloé - Iglesia Presbiteriana · versión 2.1
 
 Administración de miembros, asistencia, eventos, ministerios, aportaciones y comunicados. Cinco roles con autorización en el servidor y base de datos SQLite persistente.
 
@@ -24,6 +24,7 @@ En la primera ejecución, crea el administrador. No hay cuentas ni contraseñas 
 - Detección de duplicados por nombre normalizado o correo; confirmación explícita para homónimos.
 - Importación Excel/CSV con plantilla, revisión previa, errores por fila y omisión de duplicados.
 - Edición, roles y desactivación de usuarios; revocación de sesiones y protección del último administrador.
+- Correo de recuperación y teléfono opcionales al crear/editar cuentas; actualización personal con contraseña actual. El enlace usa el correo alternativo si existe; el teléfono es contacto de apoyo, sin SMS.
 - Cambio de contraseña personal y recuperación SMTP con enlace, caducidad y token de un solo uso.
 - Asistencia con búsqueda y marcado de todos; historial y filtros por evento/periodo.
 - Calendario mensual, cancelación conservando historial y actividades por ministerio.

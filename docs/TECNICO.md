@@ -20,7 +20,7 @@ Dependencias: Nodemailer para SMTP; read-excel-file para .xlsx; Sharp para valid
 
 | Tabla | Campos | Uso |
 |---|---|---|
-| users | id, name, email UNIQUE, password, role, active | Cuentas y baja lógica |
+| users | id, name, email UNIQUE, password, role, active, recovery_email, recovery_phone | Cuentas y baja lógica |
 | sessions | token PK, user_id FK, expires | Hash del token y duración de ocho horas |
 | resets | token PK, user_id FK, expires | Recuperación de un uso, 30 minutos |
 | records | id, kind, body JSON | Entidades por módulo |
@@ -39,6 +39,7 @@ Miembro: name, phone, email, joined, active, family. Evento: ministryId opcional
 | /api/login, /api/logout | POST | Abrir / cerrar sesión |
 | /api/forgot, /api/reset | POST | Solicitar / canjear token |
 | /api/me | GET | Cuenta, rol y permisos |
+| /api/account/recovery | PUT | Datos propios de recuperación, requiere contraseña actual |
 | /api/account/password | POST | Cambio con contraseña actual |
 | /api/users | GET / POST | Listar / crear, solo administrador |
 | /api/users/:id | PUT | Nombre, correo, rol, estado y contraseña opcional |
@@ -66,3 +67,7 @@ No hay segundo factor, auditoría de todas las modificaciones ni separación de 
 - https://github.com/catamphetamine/read-excel-file
 - https://pdfkit.org/docs/getting_started.html
 - https://sharp.pixelplumbing.com
+
+## Contactos de recuperación
+
+API: recoveryEmail y recoveryPhone (opcionales). Se conservan al editar una cuenta si no se envían; una cadena vacía los elimina. Se migran las cuentas existentes con campos vacíos. Solo el dueño de la cuenta y el administrador acceden a ellos. Se excluyen de la identidad pública y de los reportes de miembros. /api/forgot siempre recibe el correo principal, sin permitir elegir un destinatario desde la solicitud. El servidor resuelve el correo alternativo guardado o utiliza el principal. Al cambiar contactos se revocan los tokens pendientes. No hay proveedor SMS integrado.

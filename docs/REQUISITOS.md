@@ -2,7 +2,7 @@
 
 | RF | Funciones implementadas | Validación / configuración |
 |---|---|---|
-| RF-01 | Correo y contraseña, alta/edición/desactivación, roles, cierre, cambio personal y recuperación SMTP | Autorización de API, invalidación de sesiones, último administrador protegido. Entrega SMTP probada localmente; falta configurar correo real. |
+| RF-01 | Correo y contraseña, alta/edición/desactivación, roles, cierre, cambio personal y recuperación SMTP, correo alternativo y teléfono opcionales | Autorización de API, invalidación de sesiones, último administrador protegido. Entrega SMTP probada localmente; falta configurar correo real. |
 | RF-02 | Alta rápida, edición, listado, nombre/teléfono/correo/ingreso, búsqueda, estados y baja lógica | Duplicados advertidos con confirmación para homónimos. Excel/CSV con revisión previa. |
 | RF-03 | Evento y fecha, presentes/ausentes, edición e historial | Búsqueda, marcado masivo, reporte semanal/mensual, porcentaje y nombres. No duplica evento-fecha. |
 | RF-04 | Crear, modificar y cancelar, responsable, lugar, descripción y calendario mensual | Historial conservado; no acepta asistencia nueva en cancelados. |

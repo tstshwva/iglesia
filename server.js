@@ -6,7 +6,7 @@ import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import sharp from 'sharp';
-import { roles, permissions, fail, text, validEmail, password, record, duplicate } from './lib/domain.js';
+import { roles, permissions, fail, text, validEmail, password, recovery, record, duplicate } from './lib/domain.js';
 import { deliverReset, mailStatus } from './lib/mail.js';
 import { previewImport } from './lib/import.js';
 import { report, reportPdf } from './lib/reports.js';
@@ -22,6 +22,7 @@ db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
  CREATE TABLE IF NOT EXISTS records(id INTEGER PRIMARY KEY,kind TEXT NOT NULL,body TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);`);
 if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'active')) db.exec('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+for (const column of ['recovery_email', 'recovery_phone']) if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === column)) db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
 if (!db.prepare('SELECT id FROM settings').get()) db.prepare('INSERT INTO settings VALUES(1,?)').run(JSON.stringify({ name: 'Siloé - Iglesia Presbiteriana', address: '', phone: '', email: '', schedule: 'Domingos 10:00', logo: '', cover: '' }));
 
 const settings = () => JSON.parse(db.prepare('SELECT body FROM settings WHERE id=1').get().body);
@@ -61,7 +62,7 @@ const server = http.createServer(async (req, res) => {
   const download = (bytes, type, name) => { res.writeHead(200, { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' }); res.end(bytes); };
   try {
     const url = new URL(req.url, 'http://localhost'), p = url.pathname, method = req.method;
-    if (p === '/health' && method === 'GET') return send(200, { ok: true, app: 'siloe', version: '2.0.0' });
+    if (p === '/health' && method === 'GET') return send(200, { ok: true, app: 'siloe', version: '2.1.0' });
     if (!p.startsWith('/api/')) {
       const paths = { '/': 'index.html', '/app.js': 'app.js', '/export.js': 'export.js', '/style.css': 'style.css' };
       const f = paths[p]; if (!f || method !== 'GET') return send(404, { error: 'No encontrado' });
@@ -70,12 +71,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (method !== 'GET' && req.headers.origin && ![`http://${req.headers.host}`, `https://${req.headers.host}`, process.env.APP_URL].filter(Boolean).includes(req.headers.origin)) fail('Origen rechazado.', 403);
     if (p === '/api/branding' && method === 'GET') { const s = settings(); return send(200, { name: s.name, logo: s.logo || '', cover: s.cover || '' }); }
-    if (p === '/api/status' && method === 'GET') return send(200, { version: '2.0.0', setup: !db.prepare('SELECT id FROM users LIMIT 1').get(), setupTokenRequired: Boolean(process.env.SETUP_TOKEN) });
+    if (p === '/api/status' && method === 'GET') return send(200, { version: '2.1.0', setup: !db.prepare('SELECT id FROM users LIMIT 1').get(), setupTokenRequired: Boolean(process.env.SETUP_TOKEN) });
     if (p === '/api/setup' && method === 'POST') {
       if (db.prepare('SELECT id FROM users LIMIT 1').get()) fail('Configuración ya realizada.', 403);
       if (process.env.SETUP_TOKEN && req.headers['x-setup-token'] !== process.env.SETUP_TOKEN) fail('Token de instalación incorrecto.', 403);
       const b = await body(req); if (!text(b.name) || !validEmail(text(b.email))) fail('Nombre y correo válidos requeridos.');
-      db.prepare('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), 'administrador'); return send(201, { ok: true });
+      const contact = recovery(b);
+      db.prepare('INSERT INTO users(name,email,password,role,recovery_email,recovery_phone) VALUES(?,?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), 'administrador', contact.recoveryEmail, contact.recoveryPhone); return send(201, { ok: true });
     }
     if (p === '/api/login' && method === 'POST') {
       throttle(req.socket.remoteAddress); const b = await body(req), u = db.prepare('SELECT * FROM users WHERE email=? AND active=1').get(text(b.email).toLowerCase());
@@ -96,7 +98,7 @@ const server = http.createServer(async (req, res) => {
       db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(password(b.password)), r.user_id); db.prepare('DELETE FROM resets WHERE user_id=?').run(r.user_id); db.prepare('DELETE FROM sessions WHERE user_id=?').run(r.user_id); return send(200, { ok: true });
     }
     const token = /(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
-    const u = db.prepare('SELECT u.id,u.name,u.email,u.role,u.active FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1').get(digest(token), Date.now());
+    const u = db.prepare('SELECT u.id,u.name,u.email,u.role,u.active,u.recovery_email AS recoveryEmail,u.recovery_phone AS recoveryPhone FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1').get(digest(token), Date.now());
     if (!u) fail('Inicia sesión.', 401);
     const can = kind => { if (!permissions[kind]?.includes(u.role)) fail('Tu rol no permite esta operación.', 403); };
     if (p === '/api/me' && method === 'GET') return send(200, { ...u, permissions: Object.keys(permissions).filter(k => permissions[k].includes(u.role)) });
@@ -104,6 +106,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/account/password' && method === 'POST') {
       const b = await body(req), own = db.prepare('SELECT password FROM users WHERE id=?').get(u.id); if (!valid(b.current, own.password)) fail('La contraseña actual no es correcta.');
       db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(password(b.password)), u.id); db.prepare('DELETE FROM sessions WHERE user_id=?').run(u.id); return send(200, { ok: true });
+    }
+    if (p === '/api/account/recovery' && method === 'PUT') {
+      const b = await body(req), own = db.prepare('SELECT * FROM users WHERE id=?').get(u.id);
+      if (!valid(b.current, own.password)) fail('Confirma tu contraseña actual para actualizar la recuperación.', 403);
+      const contact = recovery(b, own);
+      db.prepare('UPDATE users SET recovery_email=?,recovery_phone=? WHERE id=?').run(contact.recoveryEmail, contact.recoveryPhone, u.id);
+      db.prepare('DELETE FROM resets WHERE user_id=?').run(u.id);
+      return send(200, { ok: true });
     }
     if (p === '/api/settings') {
       if (method === 'GET') return send(200, settings()); can('settings'); if (method !== 'PUT') fail('Método no permitido.', 405);
@@ -118,17 +128,21 @@ const server = http.createServer(async (req, res) => {
     const usersMatch = /^\/api\/users(?:\/(\d+))?$/.exec(p);
     if (usersMatch) {
       can('users'); const id = Number(usersMatch[1]);
-      if (method === 'GET' && !id) return send(200, db.prepare('SELECT id,name,email,role,active FROM users ORDER BY id').all());
+      if (method === 'GET' && !id) return send(200, db.prepare('SELECT id,name,email,role,active,recovery_email AS recoveryEmail,recovery_phone AS recoveryPhone FROM users ORDER BY id').all());
       if (!(method === 'POST' && !id || method === 'PUT' && id)) fail('Método no permitido.', 405);
       const b = await body(req); if (!text(b.name) || text(b.name).length > 160 || !validEmail(text(b.email)) || !roles.includes(b.role)) fail('Revisa nombre, correo y rol.');
       const active = b.active === false || b.active === 0 || b.active === 'Inactivo' ? 0 : 1;
       if (id) {
         const old = db.prepare('SELECT * FROM users WHERE id=?').get(id); if (!old) fail('Usuario inexistente.', 404);
         if (old.role === 'administrador' && old.active && (!active || b.role !== 'administrador') && db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='administrador' AND active=1").get().n <= 1) fail('Debe quedar al menos un administrador activo.');
-        const pass = b.password ? hash(password(b.password)) : old.password;
-        db.prepare('UPDATE users SET name=?,email=?,role=?,active=?,password=? WHERE id=?').run(text(b.name), text(b.email).toLowerCase(), b.role, active, pass, id);
+        const pass = b.password ? hash(password(b.password)) : old.password, contact = recovery(b, old);
+        db.prepare('UPDATE users SET name=?,email=?,role=?,active=?,password=?,recovery_email=?,recovery_phone=? WHERE id=?').run(text(b.name), text(b.email).toLowerCase(), b.role, active, pass, contact.recoveryEmail, contact.recoveryPhone, id);
+        if (contact.recoveryEmail !== old.recovery_email || contact.recoveryPhone !== old.recovery_phone) db.prepare('DELETE FROM resets WHERE user_id=?').run(id);
         if (old.role !== b.role || !active || b.password) { db.prepare('DELETE FROM sessions WHERE user_id=?').run(id); db.prepare('DELETE FROM resets WHERE user_id=?').run(id); }
-      } else db.prepare('INSERT INTO users(name,email,password,role,active) VALUES(?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), b.role, active);
+      } else {
+        const contact = recovery(b);
+        db.prepare('INSERT INTO users(name,email,password,role,active,recovery_email,recovery_phone) VALUES(?,?,?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), b.role, active, contact.recoveryEmail, contact.recoveryPhone);
+      }
       return send(id ? 200 : 201, { ok: true });
     }
     if (p === '/api/members/import/preview' && method === 'POST') {
