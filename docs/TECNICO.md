@@ -71,3 +71,15 @@ No hay segundo factor, auditoría de todas las modificaciones ni separación de 
 ## Contactos de recuperación
 
 API: recoveryEmail y recoveryPhone (opcionales). Se conservan al editar una cuenta si no se envían; una cadena vacía los elimina. Se migran las cuentas existentes con campos vacíos. Solo el dueño de la cuenta y el administrador acceden a ellos. Se excluyen de la identidad pública y de los reportes de miembros. /api/forgot siempre recibe el correo principal, sin permitir elegir un destinatario desde la solicitud. El servidor resuelve el correo alternativo guardado o utiliza el principal. Al cambiar contactos se revocan los tokens pendientes. No hay proveedor SMS integrado.
+
+## Comunidad 3.0
+
+Rutas estáticas: /admin y /comunidad. API pública: POST /api/register, POST /api/verify-email y GET /api/portal. La proyección pública solo expone identidad institucional y publicaciones visibles; excluye responsables y listas de integrantes.
+
+API de cuenta: POST /api/portal/verification; POST/DELETE /api/portal/events/:id/rsvp; GET /api/portal/events/:id/calendar (ICS con control de visibilidad). API de responsables: GET /api/registrations, POST /api/registrations/:id/decision y GET /api/event-rsvps. Se aplican permisos de miembros o eventos respectivamente.
+
+Migraciones: users añade phone, membership_status, email_verified y member_id; índice único de vinculación; tablas verifications (hash y caducidad de 24 horas) y rsvps (usuario/evento únicos). La aprobación es transaccional. El rol miembro se bloquea antes de todas las rutas administrativas, conservando sus rutas personales. Tokens de verificación son de uso único y se renuevan al reenviar.
+
+Eventos, ministerios y anuncios incorporan visibility: publico, miembros o privado. Los datos anteriores se interpretan como privados. Eventos admiten address y photo normalizada. El webhook de correo incluye kind (verification/reset), email, token, link, subject, text y expiresMinutes; debe tratarse como un secreto. En producción no se imprimen tokens.
+
+Referencias: https://developers.google.com/maps/documentation/urls/get-started y https://developer.apple.com/library/archive/featuredarticles/iPhoneURLScheme_Reference/MapLinks/MapLinks.html

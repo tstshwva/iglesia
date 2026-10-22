@@ -37,7 +37,7 @@ test('Migración, identidad, importación, reportes, usuarios y entrega SMTP', {
       const r = await fetch(base + '/api/' + p, { method, signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', cookie: auth }, body: body ? JSON.stringify(body) : undefined });
       return { status: r.status, data: r.headers.get('Content-Type')?.includes('application/json') ? await r.json() : Buffer.from(await r.arrayBuffer()), cookie: r.headers.get('set-cookie')?.split(';')[0] };
     };
-    assert.equal((await request('status')).data.version, '2.1.0');
+    assert.equal((await request('status')).data.version, '3.0.0');
     assert.equal((await request('setup', 'POST', { name: 'Administrador', email: 'admin@example.test', password: 'Password12345!', recoveryEmail: 'Backup@EXAMPLE.test', recoveryPhone: '+52 555 123 4567' })).status, 201);
     cookie = (await request('login', 'POST', { email: 'admin@example.test', password: 'Password12345!' })).cookie;
     const image = 'data:image/png;base64,' + (await sharp({ create: { width: 48, height: 48, channels: 4, background: '#245d4a' } }).png().toBuffer()).toString('base64');

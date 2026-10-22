@@ -19,8 +19,8 @@ function identity() { document.title = `${branding.name} · Administración`; le
 function download(blob, filename) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1500); }
 async function load() {
   try {
-    user = await api('me'); settings = await api('settings'); branding = { name: settings.name, logo: settings.logo || '', cover: settings.cover || '' }; identity(); data = {};
-    const kinds = ['members', 'events', 'attendance', 'ministries', 'announcements', ...(can('donations') ? ['donations'] : []), ...(can('users') ? ['users'] : [])];
+    user = await api('me'); if (user.role === 'miembro') { location.replace('/comunidad'); return; } settings = await api('settings'); branding = { name: settings.name, logo: settings.logo || '', cover: settings.cover || '' }; identity(); data = {};
+    const kinds = ['members', 'events', 'attendance', 'ministries', 'announcements', ...(can('donations') ? ['donations'] : []), ...(can('users') ? ['users'] : []), ...(can('members') ? ['registrations'] : []), ...(can('events') ? ['event-rsvps'] : [])];
     await Promise.all(kinds.map(async k => data[k] = await api(k))); render();
   } catch (e) { if (e.status === 401) { user = undefined; data = {}; view = 'dashboard'; auth(); } else throw e; }
 }
@@ -30,6 +30,7 @@ function auth(mode = 'login') {
   if (reset) { mode = 'reset'; history.replaceState(null, '', location.pathname); }
   $('#app').innerHTML = `<div class="auth"><section class="auth-photo"><div id="auth-background"></div>${brand('auth-brand')}<div class="auth-message"><p class="eyebrow">JUNTOS CRECEMOS EN FE</p><h1>Una comunidad.<br>Una misma fe.</h1><p>Un espacio para cuidar, organizar y acompañar a nuestra iglesia.</p></div></section><section class="auth-panel"><div>${brand('login-brand')}<p class="eyebrow">ADMINISTRACIÓN DE LA IGLESIA</p><h1>${titles[mode]}</h1><p class="muted">${mode === 'setup' ? 'Crea la primera cuenta de administrador.' : mode === 'forgot' ? 'Ingresa el correo principal de tu cuenta. Enviaremos el enlace a tu correo de recuperación, o al principal si no configuraste otro.' : 'Ingresa tus datos para continuar.'}</p><form id="auth">${mode === 'setup' ? '<label>Nombre<input name="name" required maxlength="160" autocomplete="name"></label>' : ''}${mode !== 'reset' ? '<label>Correo electrónico<input name="email" type="email" required autocomplete="email"></label>' : `<label>Código de recuperación<input name="token" value="${esc(reset)}" required autocomplete="off"></label>`}${mode !== 'forgot' ? `<label>Contraseña<input name="password" type="password" required ${mode === 'login' ? '' : 'minlength="12"'} maxlength="256" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>` : ''}${mode === 'setup' ? recoveryFields() : ''}${mode === 'setup' && status.setupTokenRequired ? '<label>Token de instalación<input name="setupToken" type="password" required></label>' : ''}<p class="error" id="error" role="alert"></p><button>${mode === 'login' ? 'Iniciar sesión' : mode === 'setup' ? 'Crear administrador' : mode === 'forgot' ? 'Enviar instrucciones' : 'Guardar contraseña'}</button></form><div class="links">${mode !== 'setup' ? '<button class="secondary" data-auth="login">Iniciar sesión</button><button class="secondary" data-auth="forgot">Olvidé mi contraseña</button><button class="secondary" data-auth="reset">Tengo un código</button>' : ''}</div></div></section></div>`;
   $('#auth-background').style.backgroundImage = `linear-gradient(0deg,#12392de8,#12392d22),url("${branding.cover || photo}")`;
+  $('.auth-panel>div').insertAdjacentHTML('beforeend', '<p><a href="/comunidad">Visitar la página de la comunidad →</a></p>');
   document.querySelectorAll('[data-auth]').forEach(b => b.onclick = () => auth(b.dataset.auth));
   $('#auth').onsubmit = async e => {
     e.preventDefault(); const button = e.target.querySelector('button'); button.disabled = true;
@@ -44,6 +45,7 @@ function render() {
   document.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => { view = b.dataset.nav; search = ''; filter = ''; render(); });
   for (const selector of ['#exit', '#logout']) if ($(selector)) $(selector).onclick = async () => { await api('logout', 'POST'); user = undefined; data = {}; view = 'dashboard'; auth(); };
   $('#password').onclick = changePassword;
+  $('#password').insertAdjacentHTML('beforebegin', '<a class="secondary" href="/comunidad">Ver comunidad ↗</a>');
   $('#password').insertAdjacentHTML('beforebegin', '<button id="recovery" class="secondary">Recuperación</button>');
   $('#recovery').onclick = () => dialog('Mis datos de recuperación', `${recoveryFields(user)}${field('current', 'Confirma tu contraseña actual *', '', 'password', true, 'autocomplete="current-password"')}`, async v => { await api('account/recovery', 'PUT', v); });
   if (view === 'dashboard') dashboard(); else if (view === 'settings') configuration(); else if (view === 'reports') reports(); else if (view === 'attendance') attendance(); else listing();
@@ -64,7 +66,7 @@ function dashboard() {
 const field = (name, title, value = '', type = 'text', required = false, extra = '') => `<label>${title}<input name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''} ${extra}></label>`;
 const select = (name, title, values, value, required = false) => `<label>${title}<select name="${name}" ${required ? 'required' : ''}>${values.map(v => { const [id, label] = Array.isArray(v) ? v : [v, v]; return `<option value="${esc(id)}" ${String(id) === String(value) ? 'selected' : ''}>${esc(label)}</option>`; }).join('')}</select></label>`;
 const textarea = (name, title, value = '', required = false) => `<label class="full">${title}<textarea name="${name}" rows="3" maxlength="5000" ${required ? 'required' : ''}>${esc(value)}</textarea></label>`;
-const roles = ['administrador', 'pastor', 'secretario', 'tesorero', 'coordinador'];
+const roles = ['administrador', 'pastor', 'secretario', 'tesorero', 'coordinador', 'miembro'];
 function recoveryFields(b = {}) {
   return `${field('recoveryEmail', 'Correo de recuperación (opcional)', b.recoveryEmail, 'email', false, 'maxlength="254" autocomplete="email"')}${field('recoveryPhone', 'Teléfono de recuperación (opcional)', b.recoveryPhone, 'tel', false, 'maxlength="30" autocomplete="tel" placeholder="+52 555 123 4567"')}<p class="muted full">El enlace se enviará al correo de recuperación; si lo dejas vacío, se usará el principal. El teléfono es un contacto de apoyo para recuperar el acceso con el administrador; no se envían códigos por SMS.</p>`;
 }
@@ -90,14 +92,22 @@ function dialog(title, html, onSave, another = false) {
 }
 function editor(kind, id) {
   const b = data[kind]?.find(r => r.id === id) || {};
-  dialog((id ? 'Editar ' : 'Registrar ') + names[kind].toLowerCase(), fields(kind, b, Boolean(id)), async (v, f) => {
+  let html = fields(kind, b, Boolean(id));
+  if (['events', 'announcements', 'ministries'].includes(kind)) html += select('visibility', 'Publicación en la comunidad', [['privado', 'Solo administración'], ['publico', 'Público: cualquier visitante'], ['miembros', 'Solo miembros aprobados']], b.visibility || 'privado') + '<p class="muted full">Elige explícitamente qué verá la congregación. Los datos de miembros e ingresos nunca se publican.</p>';
+  if (kind === 'events') html += field('address', 'Dirección completa para Google Maps y Apple Maps', b.address || '', 'text', false, 'maxlength="400"') + `<label class="full">Fotografía del evento (hasta 2 MB)<input name="eventPhoto" type="file" accept="image/png,image/jpeg,image/webp"></label>${b.photo ? `<img class="cover-preview full" src="${esc(b.photo)}" alt="Foto del evento"><label class="check full"><input name="removePhoto" type="checkbox">Quitar foto</label>` : ''}`;
+  dialog((id ? 'Editar ' : 'Registrar ') + names[kind].toLowerCase(), html, async (v, f) => {
     if (kind === 'ministries') v.members = new FormData(f).getAll('members').map(Number);
     if (kind === 'members') v.confirmDuplicate = v.confirmDuplicate === 'on';
+    if (kind === 'events') { const photo = f.querySelector('[name=eventPhoto]').files[0]; if (photo && !['image/png', 'image/jpeg', 'image/webp'].includes(photo.type)) throw Error('Usa una foto PNG, JPG o WebP.'); v.photo = v.removePhoto ? '' : photo ? await fileData(photo, 2e6) : b.photo || ''; }
     await api(kind + (id ? '/' + id : ''), id ? 'PUT' : 'POST', v);
   }, kind === 'members' && !id);
 }
 const columns = { members: [['name', 'Nombre'], ['phone', 'Teléfono'], ['email', 'Correo'], ['joined', 'Ingreso'], ['family', 'Familia'], ['active', 'Estado']], events: [['title', 'Evento'], ['date', 'Fecha'], ['time', 'Hora'], ['place', 'Lugar'], ['responsible', 'Responsable'], ['ministryId', 'Ministerio'], ['status', 'Estado']], ministries: [['name', 'Ministerio'], ['coordinator', 'Coordinador'], ['members', 'Integrantes']], donations: [['date', 'Fecha'], ['amount', 'Monto'], ['concept', 'Concepto'], ['method', 'Método'], ['memberId', 'Aportante']], announcements: [['title', 'Título'], ['date', 'Publicación'], ['description', 'Contenido']], users: [['name', 'Nombre'], ['email', 'Correo'], ['recoveryEmail', 'Correo de recuperación'], ['recoveryPhone', 'Teléfono de recuperación'], ['role', 'Rol'], ['active', 'Estado']] };
+for (const kind of ['events', 'announcements', 'ministries']) columns[kind].push(['visibility', 'Publicación']);
+columns.events.push(['rsvp', 'Confirmaciones']);
 function cell(k, r) {
+  if (k === 'visibility') return esc(({ publico: 'Público', miembros: 'Miembros aprobados', privado: 'Solo administración' })[r.visibility || 'privado']);
+  if (k === 'rsvp') return esc(data['event-rsvps']?.find(s => s.eventId === r.id)?.count || 0);
   if (k === 'amount') return money(Number(r[k]));
   if (k === 'members') return esc((r.members || []).map(id => data.members.find(m => m.id === id)?.name || '').join(', ') || 'Sin integrantes');
   if (k === 'memberId') return esc(data.members.find(m => String(m.id) === String(r[k]))?.name || 'Anónima');
@@ -116,6 +126,16 @@ function listing() {
   if ($('#calendar')) $('#calendar').onclick = calendar;
   if ($('#import')) $('#import').onclick = importMembers;
   if ($('#template')) $('#template').onclick = () => download(workbook([['Nombre', 'Teléfono', 'Correo', 'Fecha de ingreso', 'Estado', 'Familia']]), 'plantilla-miembros.xlsx');
+  if (kind === 'members' && can('members')) registrationPanel();
+}
+function registrationPanel() {
+  const requests = data.registrations || [];
+  $('#content').insertAdjacentHTML('afterbegin', `<section class="card" style="margin-bottom:22px"><h2>Solicitudes de nuevos miembros · ${requests.filter(r => r.membershipStatus === 'pendiente').length} pendientes</h2><p class="muted">Los registros de /comunidad aparecen aquí. Verifica y aprueba para crear o vincular al miembro sin duplicarlo.</p><div class="table-wrap"><table><tr><th>Nombre</th><th>Correo</th><th>Teléfono</th><th>Verificación</th><th>Solicitud</th><th>Acciones</th></tr>${requests.map(r => `<tr><td>${esc(r.name)}</td><td>${esc(r.email)}</td><td>${esc(r.phone)}</td><td>${r.emailVerified ? 'Verificado' : 'Pendiente de verificar'}</td><td>${esc(r.membershipStatus)}</td><td><div class="actions"><button data-approve="${r.id}" ${r.emailVerified ? '' : 'disabled'}>Revisar y aprobar</button>${r.membershipStatus === 'pendiente' ? `<button class="secondary" data-reject="${r.id}">Rechazar</button>` : ''}</div></td></tr>`).join('')}</table>${requests.length ? '' : empty('Sin solicitudes pendientes.')}</div></section>`);
+  document.querySelectorAll('[data-approve]').forEach(button => button.onclick = () => {
+    const r = requests.find(r => r.id === Number(button.dataset.approve));
+    dialog('Aprobar solicitud de miembro', `<p class="full"><strong>${esc(r.name)}</strong><br>${esc(r.email)} · ${esc(r.phone)}</p>${r.candidates.length ? select('memberId', 'Vincular al miembro existente', r.candidates.map(m => [m.id, m.name + ' · ' + m.active]), r.candidates[0].id, true) : '<p class="full">Se creará un miembro activo y se vinculará con esta cuenta.</p>'}`, async v => { await api('registrations/' + r.id + '/decision', 'POST', { action: 'aprobar', ...(v.memberId ? { memberId: Number(v.memberId) } : {}) }); });
+  });
+  document.querySelectorAll('[data-reject]').forEach(button => button.onclick = async () => { if (confirm('¿Rechazar esta solicitud? La cuenta no tendrá acceso a eventos exclusivos de miembros.')) { await api('registrations/' + button.dataset.reject + '/decision', 'POST', { action: 'rechazar' }); await load(); notify('Solicitud rechazada.'); } });
 }
 async function fileData(file, max) {
   if (!file || file.size > max) throw Error(`Selecciona un archivo de menos de ${max / 1e6} MB.`);
@@ -180,5 +200,5 @@ async function reports() {
   $('#pdf').onclick = async () => { try { const path = url().replace('?', '/pdf?'), r = await fetch('/api/' + path); if (!r.ok) throw Error((await r.json()).error); download(await r.blob(), `reporte-${info.kind}.pdf`); } catch (e) { notify(e.message); } }; update();
 }
 window.addEventListener('unhandledrejection', event => { notify(event.reason?.message || 'No se pudo completar la operación.'); event.preventDefault(); });
-try { status = await api('status'); if (status.version !== '2.1.0') throw Error('El servidor abierto es de una versión anterior. Ejecuta de nuevo iniciar.cmd y utiliza la nueva dirección que abra automáticamente.'); branding = await api('branding'); identity(); if (status.setup) auth('setup'); else if (location.hash.startsWith('#restablecer=')) auth('reset'); else await load(); }
+try { status = await api('status'); if (status.version !== '3.0.0') throw Error('El servidor abierto es de una versión anterior. Ejecuta de nuevo iniciar.cmd y utiliza la nueva dirección que abra automáticamente.'); branding = await api('branding'); identity(); if (status.setup) auth('setup'); else if (location.hash.startsWith('#restablecer=')) auth('reset'); else await load(); }
 catch (e) { $('#app').innerHTML = `<div class="card"><h1>No se pudo conectar</h1><p>${esc(e.message)}</p><p>Comprueba que el servidor esté iniciado y actualiza la página.</p></div>`; }

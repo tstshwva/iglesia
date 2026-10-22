@@ -25,8 +25,12 @@
 | Comunicados | Sí | Sí | Sí | No | No |
 | Usuarios / configuración | Sí | No | No | No | No |
 
-Todos los roles autenticados consultan módulos no financieros y sus reportes. El acceso financiero no se obtiene ocultando botones: lo comprueba el servidor en todas sus rutas. Cada usuario puede cambiar su propia contraseña.
+Los cinco roles administrativos consultan módulos no financieros y sus reportes. El acceso financiero no se obtiene ocultando botones: lo comprueba el servidor en todas sus rutas. Cada usuario puede cambiar su propia contraseña.
 
 ## Dependencias externas y aceptación
 
 El código está implementado; una entrega operativa en internet también necesita dominio/HTTPS, alojamiento con disco persistente y datos SMTP reales. Las pruebas de servidor y PDF son evidencia automatizada/visual, pero no sustituyen la aceptación de todas las pantallas en el navegador del usuario. Ver VALIDACION.md.
+
+## Comunidad
+
+El rol miembro solo accede a comunidad y a su propia cuenta. No consulta módulos ni reportes internos. Administrador, pastor y secretario aprueban solicitudes verificadas. La aprobación vincula un miembro con el mismo correo o crea uno nuevo. El contenido anterior permanece privado hasta publicarlo explícitamente.

@@ -1,8 +1,8 @@
-# Validación · versión 2
+# Validación · versión 3
 
 ## Evidencia automatizada
 
-npm test ejecuta tres pruebas: formato Excel, integración original y escenarios ampliados. Se usan bases temporales y no se cambian los datos reales.
+npm test ejecuta cinco pruebas: formato Excel, integración original, escenarios ampliados, calendario y comunidad. Se usan bases temporales y no se cambian los datos reales.
 
 Escenarios comprobados: configuración inicial, inicio/cierre, contraseñas, cinco roles, bloqueo financiero (también reportes), desactivación de miembros, prevención de asistencias duplicadas, montos positivos, migración desde tabla users sin estado, identidad pública limitada, imágenes válidas/dañadas, duplicados normalizados, importación .xlsx con filas válidas/duplicadas/erróneas, consumo único de revisión, participación por ministerio, periodos inválidos, total financiero, descarga PDF, último administrador protegido, cambio de rol con revocación, usuario inactivo y **entrega de recuperación a un receptor SMTP local** con canje del enlace.
 
@@ -27,3 +27,7 @@ Acceso → subir logo/portada → verificar identidad → registro rápido y Gua
 ## Verificación 2.1: contactos de recuperación
 
 Alta con correo alternativo/teléfono, migración de cuentas anteriores, rechazo de formatos inválidos, actualización personal con contraseña actual, aislamiento de datos por usuario, entrega SMTP al alternativo, revocación de enlaces al cambiar contactos y uso del correo principal si no hay alternativo. Todos los correos de prueba usan buzones ficticios y un receptor SMTP local.
+
+## Comunidad 3.0
+
+Pruebas HTTP con bases temporales: registro sin elevar permisos, correo verificado de uso único, aprobación obligatoria, vínculo sin duplicados, creación de miembros, bloqueo de API administrativas, filtrado público/miembros/privado, anuncios futuros, bajas, confirmación idempotente, cancelación y calendario ICS con escape y plegado UTF-8. El usuario confirmó que la página abre sin error; sigue pendiente la revisión visual completa.

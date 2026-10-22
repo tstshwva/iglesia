@@ -10,6 +10,7 @@ import { roles, permissions, fail, text, validEmail, password, recovery, record,
 import { deliverReset, mailStatus } from './lib/mail.js';
 import { previewImport } from './lib/import.js';
 import { report, reportPdf } from './lib/reports.js';
+import { createPortal } from './lib/portal.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 if (existsSync(path.join(root, '.env'))) loadEnvFile(path.join(root, '.env'));
@@ -55,6 +56,7 @@ function newSession(res, id) {
   const t = randomBytes(32).toString('hex'); db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(digest(t), id, Date.now() + 28800000);
   res.setHeader('Set-Cookie', `session=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`);
 }
+const portal = createPortal({ db, all, save, settings, hash, digest, newSession, throttle });
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'same-origin');
   res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://images.unsplash.com; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
@@ -62,16 +64,16 @@ const server = http.createServer(async (req, res) => {
   const download = (bytes, type, name) => { res.writeHead(200, { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' }); res.end(bytes); };
   try {
     const url = new URL(req.url, 'http://localhost'), p = url.pathname, method = req.method;
-    if (p === '/health' && method === 'GET') return send(200, { ok: true, app: 'siloe', version: '2.1.0' });
+    if (p === '/health' && method === 'GET') return send(200, { ok: true, app: 'siloe', version: '3.0.0' });
     if (!p.startsWith('/api/')) {
-      const paths = { '/': 'index.html', '/app.js': 'app.js', '/export.js': 'export.js', '/style.css': 'style.css' };
+      const paths = { '/': 'index.html', '/admin': 'index.html', '/comunidad': 'portal.html', '/comunidad/': 'portal.html', '/portal.js': 'portal.js', '/portal.css': 'portal.css', '/app.js': 'app.js', '/export.js': 'export.js', '/style.css': 'style.css' };
       const f = paths[p]; if (!f || method !== 'GET') return send(404, { error: 'No encontrado' });
       res.setHeader('Content-Type', f.endsWith('.js') ? 'text/javascript; charset=utf-8' : f.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache'); return res.end(readFileSync(path.join(root, 'public', f)));
     }
     if (method !== 'GET' && req.headers.origin && ![`http://${req.headers.host}`, `https://${req.headers.host}`, process.env.APP_URL].filter(Boolean).includes(req.headers.origin)) fail('Origen rechazado.', 403);
     if (p === '/api/branding' && method === 'GET') { const s = settings(); return send(200, { name: s.name, logo: s.logo || '', cover: s.cover || '' }); }
-    if (p === '/api/status' && method === 'GET') return send(200, { version: '2.1.0', setup: !db.prepare('SELECT id FROM users LIMIT 1').get(), setupTokenRequired: Boolean(process.env.SETUP_TOKEN) });
+    if (p === '/api/status' && method === 'GET') return send(200, { version: '3.0.0', setup: !db.prepare('SELECT id FROM users LIMIT 1').get(), setupTokenRequired: Boolean(process.env.SETUP_TOKEN) });
     if (p === '/api/setup' && method === 'POST') {
       if (db.prepare('SELECT id FROM users LIMIT 1').get()) fail('Configuración ya realizada.', 403);
       if (process.env.SETUP_TOKEN && req.headers['x-setup-token'] !== process.env.SETUP_TOKEN) fail('Token de instalación incorrecto.', 403);
@@ -98,7 +100,8 @@ const server = http.createServer(async (req, res) => {
       db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(password(b.password)), r.user_id); db.prepare('DELETE FROM resets WHERE user_id=?').run(r.user_id); db.prepare('DELETE FROM sessions WHERE user_id=?').run(r.user_id); return send(200, { ok: true });
     }
     const token = /(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
-    const u = db.prepare('SELECT u.id,u.name,u.email,u.role,u.active,u.recovery_email AS recoveryEmail,u.recovery_phone AS recoveryPhone FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1').get(digest(token), Date.now());
+    const u = db.prepare('SELECT u.id,u.name,u.email,u.role,u.active,u.recovery_email AS recoveryEmail,u.recovery_phone AS recoveryPhone,u.member_id AS memberId,u.email_verified AS emailVerified,u.membership_status AS membershipStatus FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1').get(digest(token), Date.now());
+    if (await portal.handle({ p, method, url, req, res, user: u, send, download, readBody: () => body(req) })) return;
     if (!u) fail('Inicia sesión.', 401);
     const can = kind => { if (!permissions[kind]?.includes(u.role)) fail('Tu rol no permite esta operación.', 403); };
     if (p === '/api/me' && method === 'GET') return send(200, { ...u, permissions: Object.keys(permissions).filter(k => permissions[k].includes(u.role)) });
@@ -115,6 +118,7 @@ const server = http.createServer(async (req, res) => {
       db.prepare('DELETE FROM resets WHERE user_id=?').run(u.id);
       return send(200, { ok: true });
     }
+    if (u.role === 'miembro') fail('Tu cuenta utiliza la página de la comunidad, no el panel administrativo.', 403);
     if (p === '/api/settings') {
       if (method === 'GET') return send(200, settings()); can('settings'); if (method !== 'PUT') fail('Método no permitido.', 405);
       const b = await body(req); if (!text(b.name) || text(b.name).length > 120) fail('El nombre debe tener entre 1 y 120 caracteres.');
@@ -137,11 +141,14 @@ const server = http.createServer(async (req, res) => {
         if (old.role === 'administrador' && old.active && (!active || b.role !== 'administrador') && db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='administrador' AND active=1").get().n <= 1) fail('Debe quedar al menos un administrador activo.');
         const pass = b.password ? hash(password(b.password)) : old.password, contact = recovery(b, old);
         db.prepare('UPDATE users SET name=?,email=?,role=?,active=?,password=?,recovery_email=?,recovery_phone=? WHERE id=?').run(text(b.name), text(b.email).toLowerCase(), b.role, active, pass, contact.recoveryEmail, contact.recoveryPhone, id);
+        if (b.role === 'miembro' && !old.member_id) db.prepare("UPDATE users SET membership_status='pendiente' WHERE id=?").run(id);
+        if (b.role === 'miembro' && old.email !== text(b.email).toLowerCase()) { db.prepare('UPDATE users SET email_verified=0 WHERE id=?').run(id); await portal.verification({ id, name: text(b.name), email: text(b.email).toLowerCase() }); }
         if (contact.recoveryEmail !== old.recovery_email || contact.recoveryPhone !== old.recovery_phone) db.prepare('DELETE FROM resets WHERE user_id=?').run(id);
         if (old.role !== b.role || !active || b.password) { db.prepare('DELETE FROM sessions WHERE user_id=?').run(id); db.prepare('DELETE FROM resets WHERE user_id=?').run(id); }
       } else {
         const contact = recovery(b);
-        db.prepare('INSERT INTO users(name,email,password,role,active,recovery_email,recovery_phone) VALUES(?,?,?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), b.role, active, contact.recoveryEmail, contact.recoveryPhone);
+        const created = db.prepare('INSERT INTO users(name,email,password,role,active,recovery_email,recovery_phone) VALUES(?,?,?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), b.role, active, contact.recoveryEmail, contact.recoveryPhone);
+        if (b.role === 'miembro') { const userId = Number(created.lastInsertRowid); db.prepare("UPDATE users SET membership_status='pendiente',email_verified=0 WHERE id=?").run(userId); await portal.verification({ id: userId, name: text(b.name), email: text(b.email).toLowerCase() }); }
       }
       return send(id ? 200 : 201, { ok: true });
     }
@@ -172,6 +179,10 @@ const server = http.createServer(async (req, res) => {
     if (method === 'DELETE') { if (kind !== 'announcements' || !id) fail('Utiliza desactivar o cancelar para conservar el historial.'); db.prepare('DELETE FROM records WHERE id=? AND kind=?').run(id, kind); return send(200, { ok: true }); }
     if (!(method === 'POST' && !id || method === 'PUT' && id)) fail('Método no permitido.', 405);
     const input = await body(req), b = record(kind, input, all);
+    if (kind === 'events') {
+      const previous = id ? all(kind).find(e => e.id === id) : undefined;
+      b.photo = input.photo === undefined ? previous?.photo || '' : input.photo === previous?.photo ? previous.photo : await image(input.photo, 2000000);
+    }
     if (kind === 'members') { const match = duplicate(b, all(kind), id); if (match && input.confirmDuplicate !== true) fail(`Posible duplicado: ${match.name}. Revisa el registro existente.`, 409, { duplicateId: match.id }); }
     if (kind === 'attendance') {
       if (all(kind).some(a => a.id !== id && Number(a.eventId) === b.eventId && a.date === b.date)) fail('Ya existe asistencia para este evento y fecha.');

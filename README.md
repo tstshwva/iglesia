@@ -1,4 +1,4 @@
-# Siloé - Iglesia Presbiteriana · versión 2.1
+# Siloé - Iglesia Presbiteriana · versión 3.0
 
 Administración de miembros, asistencia, eventos, ministerios, aportaciones y comunicados. Cinco roles con autorización en el servidor y base de datos SQLite persistente.
 
@@ -15,6 +15,12 @@ En PowerShell, situado en esta carpeta:
 La dirección habitual es http://127.0.0.1:3000. Si está ocupado por una versión anterior, el iniciador usa 3001 u otro puerto libre: **utiliza la dirección que muestra la ventana**, no una pestaña antigua. No necesitas permisos de administrador.
 
 En la primera ejecución, crea el administrador. No hay cuentas ni contraseñas predeterminadas. Si ya usabas la versión anterior, se conserva tu base de datos y se añade el estado de usuarios automáticamente.
+
+## Página de comunidad
+
+Abre **Ver comunidad** desde el panel o agrega /comunidad a la dirección del iniciador. Administración: /admin. Ambas páginas comparten la base de datos.
+
+Incluye eventos con Google Maps y Apple Maps, calendario descargable, confirmación de intención de asistir, avisos y ministerios. El registro aparece como solicitud en Miembros; después de verificar el correo, un responsable aprueba y vincula o crea el miembro. [Guía de comunidad](docs/COMUNIDAD.md).
 
 ## Mejoras incluidas
 

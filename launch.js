@@ -34,7 +34,7 @@ child.stdout.on('data', async chunk => {
   try {
     const response = await fetch(url + '/health', { signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw Error('No responde el servidor.');
-    console.log(`\nAbre ${url}\nMantén esta ventana abierta. Para salir pulsa Ctrl+C.\n`);
+    console.log(`\nAbre ${url}\nAdministración: ${url}/admin\nComunidad: ${url}/comunidad\nMantén esta ventana abierta. Para salir pulsa Ctrl+C.\n`);
     if (process.argv.includes('--no-open')) return;
     if (process.platform === 'win32') spawn('explorer.exe', [url], { windowsHide: true, stdio: 'ignore' }).on('error', () => {});
     else spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore' }).on('error', () => {});
