@@ -1,54 +1,66 @@
-# Siloé - Iglesia Presbiteriana
+# Siloé - Iglesia Presbiteriana · versión 2
 
-Aplicación web en español para administrar miembros, asistencia, eventos, ministerios, aportaciones y comunicados. Incluye cinco roles y almacenamiento permanente en SQLite.
+Administración de miembros, asistencia, eventos, ministerios, aportaciones y comunicados. Cinco roles con autorización en el servidor y base de datos SQLite persistente.
 
-## Abrir la aplicación en Windows
+## Abrir en Windows
 
-1. Instalar **Node.js 24 o posterior**.
-2. Abrir esta carpeta y hacer doble clic en **iniciar.cmd**. Mantener abierta la ventana que aparece: es el servidor.
-3. Visitar **http://127.0.0.1:3000**. Si el navegador abre antes que el servidor, actualizar la página.
-4. Registrar el primer administrador. Usar una contraseña de al menos 12 caracteres.
-5. Iniciar sesión y completar los datos de la iglesia en Configuración.
+Instala Node.js 24 o posterior. Abre esta carpeta y haz doble clic en **iniciar.cmd**. Instala dependencias solo si faltan, busca un puerto libre, comprueba el servidor y abre el navegador. Mantén la ventana abierta mientras utilizas la aplicación.
 
-Alternativa desde una terminal, situada en esta carpeta:
+En PowerShell, situado en esta carpeta:
+
+```powershell
+.\iniciar.cmd
+```
+
+La dirección habitual es http://127.0.0.1:3000. Si está ocupado por una versión anterior, el iniciador usa 3001 u otro puerto libre: **utiliza la dirección que muestra la ventana**, no una pestaña antigua. No necesitas permisos de administrador.
+
+En la primera ejecución, crea el administrador. No hay cuentas ni contraseñas predeterminadas. Si ya usabas la versión anterior, se conserva tu base de datos y se añade el estado de usuarios automáticamente.
+
+## Mejoras incluidas
+
+- Logo y nombre personalizados en acceso, menú, cabecera y reportes PDF; nombre institucional también en Excel.
+- Fotografía de portada configurable, vista previa y opción para quitar imágenes.
+- Registro rápido de miembros con nombre obligatorio y fecha automática; datos opcionales, familia y Guardar y agregar otro.
+- Detección de duplicados por nombre normalizado o correo; confirmación explícita para homónimos.
+- Importación Excel/CSV con plantilla, revisión previa, errores por fila y omisión de duplicados.
+- Edición, roles y desactivación de usuarios; revocación de sesiones y protección del último administrador.
+- Cambio de contraseña personal y recuperación SMTP con enlace, caducidad y token de un solo uso.
+- Asistencia con búsqueda y marcado de todos; historial y filtros por evento/periodo.
+- Calendario mensual, cancelación conservando historial y actividades por ministerio.
+- Aportaciones anónimas, ingresos mensuales y acceso financiero restringido.
+- Reportes descargables en **PDF y Excel (.xlsx)**; participación por ministerio con actividades y asistencias del periodo.
+- Gráficas de asistencia, nuevos miembros e ingresos (estos últimos según rol).
+- Pruebas automatizadas y plantilla de GitHub Actions para Windows y Linux.
+
+## Manuales
+
+- [Uso de la aplicación](docs/MANUAL.md)
+- [Matriz RF-01 a RF-10 y permisos](docs/REQUISITOS.md)
+- [Arquitectura y API](docs/TECNICO.md)
+- [Instalación, correo, respaldo y alojamiento](docs/OPERACION.md)
+- [Validación y pendientes externos](docs/VALIDACION.md)
+- [Ideas para próximas versiones](docs/IDEAS.md)
+
+## Ejemplo real del PDF generado
+
+![Reporte generado por la aplicación](docs/images/reporte-ejemplo.png)
+
+Imagen de la primera página de un PDF generado con **datos ficticios y un logo de ejemplo**. No contiene datos de miembros reales. La foto predeterminada del acceso es ilustrativa de Unsplash; se puede reemplazar por una fotografía de la iglesia en Configuración.
+
+## Desarrollo y pruebas
 
 ```sh
+npm install
+npm test
 npm start
 ```
 
-No hace falta `npm install`: la aplicación utiliza módulos incluidos en Node.js. No existen cuentas ni contraseñas predeterminadas. Los datos iniciales están vacíos intencionalmente.
+Para abrir automáticamente: npm run abrir. Para una instalación limpia de desarrollo o CI, usar npm ci con todas las instancias de la aplicación cerradas. **No ejecutar npm ci mientras un servidor esté usando las bibliotecas nativas en Windows.**
 
-![Fotografía ilustrativa de un templo](https://images.unsplash.com/photo-1438232992991-995b7058bbb3?auto=format&fit=crop&w=1000&q=85)
+## Información privada
 
-La fotografía de Unsplash es ilustrativa; no representa el edificio real de Siloé. Las pantallas de acceso y panel utilizan esta fotografía y necesitan internet para cargarla. El resto de la aplicación funciona sin esa imagen.
+La base está en data/church.sqlite. data/, .env y node_modules/ están excluidos del repositorio. Detén las instancias de la aplicación antes de respaldar la carpeta data/ completa. No subas datos personales ni credenciales a GitHub.
 
-## Documentación
+## Qué necesita configuración externa
 
-- [Manual de usuario](docs/MANUAL.md)
-- [Requisitos y criterios de aceptación RF-01 a RF-10](docs/REQUISITOS.md)
-- [Arquitectura, API y base de datos](docs/TECNICO.md)
-- [Instalación, recuperación y alojamiento](docs/OPERACION.md)
-- [Validación y límites conocidos](docs/VALIDACION.md)
-
-## Pruebas
-
-```sh
-npm test
-```
-
-La prueba de integración crea una base temporal y verifica autenticación, permisos de los cinco roles, conservación de miembros inactivos, aportaciones y prevención de asistencias duplicadas. No modifica la base de uso real.
-
-## Respaldo
-
-Los datos están en `data/church.sqlite`. Detener el servidor antes de copiar la carpeta `data/` completa a una ubicación segura. Esta carpeta está excluida de Git para impedir subir información de miembros, aportaciones o contraseñas.
-
-## GitHub
-
-Repositorio de destino: https://github.com/tstshwva/iglesia.git
-
-Subir código a GitHub **no publica el servidor**. GitHub Pages solo sirve archivos estáticos y no puede ejecutar esta aplicación con autenticación y SQLite. Consultar el manual de operación para alojamiento.
-
-## Alcance de esta entrega
-
-Exportación para Excel mediante archivos .xlsx y PDF mediante el diálogo de impresión del navegador. La recuperación de contraseñas genera tokens de un solo uso; el envío automático por correo requiere configurar un servicio `RESET_WEBHOOK`. Las capturas reales de pantallas permanecen pendientes de verificar la vista local en el equipo; no se incluyen imágenes simuladas como evidencia de pruebas.
-
+El código de correo está implementado y probado con un receptor SMTP local; para entregar correos reales hay que configurar el proveedor de la iglesia en .env. La aplicación incluye Dockerfile para alojamiento con disco persistente y HTTPS, pero **el repositorio de GitHub no es un servidor de la aplicación**. El despliegue requiere elegir y configurar un alojamiento. La revisión visual completa y capturas de las pantallas quedan pendientes de acceso del navegador al servidor local.

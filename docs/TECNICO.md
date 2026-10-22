@@ -1,57 +1,68 @@
-# Documentación técnica
+# Arquitectura y API · versión 2
 
-## Arquitectura
+Navegador HTML/CSS/JavaScript → servidor Node.js 24 → SQLite en disco. Se conservó la base anterior y se migra users.active si falta.
 
-Navegador → HTTP mismo origen → servidor Node.js → SQLite en disco.
+## Organización
 
-Se eligió Node.js 24 con módulos integrados para reducir instalación y dependencias. `node:http` sirve la aplicación y API, `node:sqlite` mantiene datos y `node:crypto` deriva claves. La interfaz utiliza HTML, CSS y JavaScript, sin compilación.
+- server.js: HTTP, autenticación, autorización y persistencia.
+- lib/domain.js: validación, normalización y duplicados.
+- lib/import.js: lectura Excel/CSV, límites y revisión de filas.
+- lib/mail.js: SMTP y webhook de recuperación.
+- lib/reports.js: consultas por periodo y generación PDF.
+- public/app.js: pantallas, formularios y calendario.
+- public/export.js: libro Excel con celdas de texto, evitando fórmulas inyectadas.
+- launch.js: preparación inicial y elección de puerto libre con comprobación de salud.
+- test/: integración de API, correo de prueba y exportación Excel.
 
-## Archivos
+Dependencias: Nodemailer para SMTP; read-excel-file para .xlsx; Sharp para validar, orientar, reducir y convertir imágenes; PDFKit para PDF. package-lock.json fija el árbol de dependencias.
 
-- `server.js`: rutas, autorización, validación y persistencia.
-- `public/index.html`: documento de entrada.
-- `public/app.js`: vistas, formularios, calendario, consultas y exportación.
-- `public/style.css`: diseño adaptable y reglas de impresión.
-- `public/export.js`: creación de libros Excel nativos, sin dependencias.
-- `test/integration.test.js`: integración sobre base temporal.
-- `data/`: información local excluida de Git.
+## Base de datos
 
-## Modelo de datos
-
-| Tabla | Campos principales | Propósito |
+| Tabla | Campos | Uso |
 |---|---|---|
-| users | id, name, email UNIQUE, password, role | Cuentas y contraseña derivada |
-| sessions | token PK, user_id FK, expires | Sesiones de 8 horas; guarda hash SHA-256 del token |
-| resets | token PK, user_id FK, expires | Recuperación de un uso; hash y vencimiento |
-| records | id, kind, body | Registros por módulo con contenido JSON |
-| settings | id=1, body | Configuración institucional |
+| users | id, name, email UNIQUE, password, role, active | Cuentas y baja lógica |
+| sessions | token PK, user_id FK, expires | Hash del token y duración de ocho horas |
+| resets | token PK, user_id FK, expires | Recuperación de un uso, 30 minutos |
+| records | id, kind, body JSON | Entidades por módulo |
+| settings | id=1, body JSON | Identidad institucional e imágenes PNG |
 
-Tipos de `records`: members, events, attendance, ministries, donations y announcements. Los identificadores son globales. Una asistencia guarda `eventId`, `date`, `present[]` y `absent[]`; un ministerio guarda `members[]`; una aportación puede tener `memberId` vacío. El formato JSON facilita esta primera versión, pero varias relaciones dependen de validación de aplicación y no de claves foráneas de SQLite.
+Miembro: name, phone, email, joined, active, family. Evento: ministryId opcional. Ministerio: members[] de identificadores. Asistencia: eventId, date, present[], absent[]. Aportación: memberId opcional. No hay eliminación permanente de miembros/eventos/finanzas. Las relaciones JSON se validan en la aplicación.
 
 ## API
 
-Todas las respuestas de API son JSON. Escrituras usan JSON en el cuerpo. La cookie `session` es HttpOnly y SameSite=Strict.
-
 | Ruta | Método | Uso |
 |---|---|---|
-| /api/status | GET | Identificar configuración inicial |
-| /api/setup | POST | Crear primer administrador, una sola vez |
-| /api/login | POST | Autenticar y crear sesión |
-| /api/logout | POST | Revocar sesión |
-| /api/forgot | POST | Solicitar token de recuperación |
-| /api/reset | POST | Canjear token y cambiar contraseña |
-| /api/me | GET | Usuario actual y permisos |
-| /api/users | GET / POST | Listar o registrar usuarios, solo administrador |
-| /api/settings | GET / PUT | Consultar / modificar configuración |
-| /api/{módulo} | GET / POST | Listar / crear registros |
-| /api/{módulo}/{id} | PUT | Editar registros |
-| /api/announcements/{id} | DELETE | Eliminar comunicado |
+| /health | GET | Salud, nombre técnico y versión |
+| /api/status | GET | Versión y configuración inicial |
+| /api/branding | GET | Solo nombre, logo y portada públicos |
+| /api/setup | POST | Primer administrador; X-Setup-Token si está configurado |
+| /api/login, /api/logout | POST | Abrir / cerrar sesión |
+| /api/forgot, /api/reset | POST | Solicitar / canjear token |
+| /api/me | GET | Cuenta, rol y permisos |
+| /api/account/password | POST | Cambio con contraseña actual |
+| /api/users | GET / POST | Listar / crear, solo administrador |
+| /api/users/:id | PUT | Nombre, correo, rol, estado y contraseña opcional |
+| /api/settings | GET / PUT | Configuración; escritura solo administrador |
+| /api/system | GET | Estado del correo sin revelar credenciales; solo administrador |
+| /api/{módulo} | GET / POST | Consultar / crear |
+| /api/{módulo}/:id | PUT | Editar |
+| /api/announcements/:id | DELETE | Eliminar comunicado |
+| /api/members/import/preview | POST | Base64, type xlsx/csv; devuelve filas y token de revisión |
+| /api/members/import/commit | POST | Guarda filas aceptadas mediante token, transacción y nueva revisión de duplicados |
+| /api/reports/{members,attendance,ministries,donations} | GET | Consultas con from/to/event/ministry/state |
+| /api/reports/{tipo}/pdf | GET | Descarga autorizada de PDF |
 
-Los módulos se indican con los nombres técnicos de `records`. Códigos: 200 éxito, 201 creado, 400 validación, 401 sin sesión, 403 sin permiso, 404 inexistente.
+Respuestas JSON, salvo descargas PDF. La importación limita archivos a 2 MB y 1000 filas y revisa el tamaño declarado del ZIP. Los tokens de revisión pertenecen a una cuenta, vencen en diez minutos y se consumen una vez. No se confían al navegador las filas que finalmente se insertan.
 
-## Seguridad implementada
+## Seguridad
 
-Contraseñas derivadas con scrypt y sal aleatoria, comparación de tiempo constante, sesiones aleatorias, autorización en servidor, consultas parametrizadas, escape de texto en HTML, comprobación de origen, política CSP y exportación Excel con celdas de texto para impedir fórmulas. Límite básico de intentos por dirección en memoria. La API financiera rechaza usuarios no autorizados antes de consultar datos.
+Scrypt con sal, comparación constante, cookies HttpOnly/SameSite, caducidad, revocación de sesiones, comprobación de origen, CSP, consultas parametrizadas, validación de datos y escape HTML. Las imágenes se procesan con límite de píxeles y sin metadatos. La marca NODE_ENV=production impide imprimir tokens de recuperación. Límite básico de intentos por dirección en memoria; para muchos usuarios detrás de un proxy conviene configurar una capa de acceso y límites acorde a esa infraestructura.
 
-Antes de exposición pública: HTTPS, cookie Secure, servicio de correo privado, instalación inicial controlada, permisos de archivos y copias de seguridad. No incluye segundo factor, auditoría completa, gestión de sesiones entre múltiples instancias ni administración de bajas de usuarios. No usar varias instancias del servidor sobre archivos SQLite diferentes.
+No hay segundo factor, auditoría de todas las modificaciones ni separación de coordinadores por un ministerio concreto. No usar varias instancias independientes con archivos SQLite distintos.
 
+## Referencias técnicas
+
+- https://nodemailer.com/smtp
+- https://github.com/catamphetamine/read-excel-file
+- https://pdfkit.org/docs/getting_started.html
+- https://sharp.pixelplumbing.com

@@ -1,57 +1,68 @@
-# Manual de usuario
+# Manual de uso · versión 2
 
-## Primer acceso
+## Inicio y acceso
 
-Ejecutar `iniciar.cmd`, esperar el mensaje de disponibilidad y abrir http://127.0.0.1:3000. En la primera ejecución, registrar nombre, correo y contraseña del administrador. Después, iniciar sesión. El registro de nuevas cuentas del sistema queda reservado al administrador; esto evita que una persona pueda asignarse privilegios por su cuenta.
+Ejecutar iniciar.cmd o, en PowerShell desde la carpeta del proyecto, .\iniciar.cmd. Esperar la dirección que muestra el iniciador. Si 3000 está ocupado, abrirá otro puerto; no reutilizar una pestaña vieja. La primera instalación solicita administrador, correo y contraseña de 12 a 256 caracteres. Si está configurado SETUP_TOKEN, el formulario también lo solicita.
 
-## Usuarios y sesiones
+Las sesiones duran ocho horas. Cerrar con Salir. Desde Mi contraseña se puede cambiar la clave actual, confirmando la nueva; el cambio cierra todas las sesiones.
 
-El administrador abre **Usuarios → Registrar**, ingresa nombre, correo, contraseña de 12 caracteres y rol. No compartir una cuenta entre varias personas. La sesión dura ocho horas; utilizar **Salir** o **Cerrar sesión** al terminar.
+## Identidad de la iglesia
 
-Para recuperar acceso, elegir **Olvidé mi contraseña** e ingresar el correo. En instalaciones con servicio de envío configurado se recibe un token. Elegir **Tengo un token**, introducirlo y definir una nueva contraseña. El token vence en 30 minutos, se utiliza una sola vez e invalida las sesiones anteriores. En modo local, un administrador debe revisar el token en la salida del servidor; este modo no envía correo.
+Con cuenta de administrador: Configuración. Capturar nombre, dirección, teléfono, correo y horarios. Subir logo PNG/JPG/WebP (hasta 500 KB) y portada (hasta 2 MB). Aparece una vista previa antes de guardar. Marcar Quitar para retirar una imagen. El servidor valida los archivos y los convierte a PNG, sin conservar metadatos originales.
 
-## Panel principal
+El logo y el nombre se reflejan en la página de acceso, menú, cabecera, vista de reportes y PDF descargado. Excel incluye nombre y datos institucionales. La portada se usa en acceso y panel. Los horarios no crean eventos recurrentes.
 
-Muestra miembros activos, próximos eventos, asistencias registradas y ministerios. Administrador y tesorero también ven el total de ingresos. La gráfica muestra el número de presentes de hasta seis asistencias recientes. No se muestran cifras ficticias cuando aún no existen registros.
+## Miembros: registro rápido
 
-## Miembros
+1. Miembros → Registrar, o Registrar miembro desde el panel.
+2. Escribir el nombre completo. Se utiliza la fecha de hoy si no indicas otra.
+3. Abrir Teléfono, correo, familia y otros datos si deseas completarlos ahora.
+4. Guardar o Guardar y agregar otro para continuar registrando.
+5. Si se detecta el mismo nombre o correo, revisar el registro existente. Solo si es una persona distinta marcar la confirmación y guardar otra vez.
 
-1. Abrir **Miembros → Registrar**.
-2. Capturar nombre, teléfono, correo opcional, fecha de ingreso y estado.
-3. Guardar; utilizar la búsqueda para localizar por nombre.
-4. Filtrar por activo o inactivo.
-5. Para una baja, editar el miembro y seleccionar **Inactivo**. El registro y su historial permanecen guardados.
+La búsqueda y filtro permiten encontrar miembros y separar activos/inactivos. Para una baja, editar y seleccionar Inactivo. Se conserva el historial. Familia/hogar permite agrupar por un texto compartido y buscarlo; no existe todavía un asistente que cree automáticamente a toda una familia.
 
-## Eventos
+## Importar desde Excel o CSV
 
-Registrar título, fecha, hora, lugar, responsable y descripción. El responsable se captura por nombre. El botón **Calendario mensual** permite recorrer los meses. Para cancelar, editar y cambiar el estado a **Cancelado**; el evento se conserva y deja de aparecer entre los próximos encuentros.
+Descargar plantilla en Miembros. La columna Nombre es obligatoria. Las demás son Teléfono, Correo, Fecha de ingreso, Estado y Familia. Mantener teléfonos como texto para conservar ceros iniciales. Fechas en AAAA-MM-DD o celdas de fecha de Excel. Solo se lee la primera hoja.
+
+Seleccionar Importar Excel / CSV, cargar el archivo y pulsar Revisar archivo. Máximo 1000 filas y 2 MB. La vista previa muestra filas listas, duplicadas y con errores. Confirmar Importar N miembros. Las filas con errores o duplicados se omiten; ningún miembro existente se sobrescribe. La revisión vence a los 10 minutos y solo puede usarse una vez.
+
+## Usuarios
+
+Administrador: Usuarios → Registrar o Editar. Cambiar nombre, correo, rol y estado. En edición, dejar la contraseña vacía para conservarla o establecer una nueva de al menos 12 caracteres. Cambiar un rol, desactivar o restablecer la contraseña revoca las sesiones del usuario. No se permite dejar a la iglesia sin administrador activo. Las cuentas inactivas no pueden iniciar sesión.
+
+## Recuperar contraseña
+
+Olvidé mi contraseña → indicar correo. Con SMTP configurado se recibe un enlace y código. El enlace abre el formulario de restablecimiento. El token vence a los 30 minutos y se utiliza una sola vez. Cambiar la clave invalida sesiones existentes. En desarrollo sin SMTP el código se muestra en la terminal; en producción no se imprime. Consultar Operación para configurar el correo real.
+
+## Eventos y ministerios
+
+Crear eventos con título, fecha, hora, lugar, responsable y descripción. El ministerio es opcional. Editar para modificar o cambiar a Cancelado; no se borra el historial. Calendario mensual permite recorrer meses.
+
+En Ministerios registrar nombre, coordinador, descripción e integrantes. Los eventos vinculados al ministerio aparecen bajo Actividades programadas. Puede haber miembros en varios ministerios. El coordinador de esta versión puede operar todos los ministerios.
 
 ## Asistencia
 
-Primero registrar los miembros y el evento. En **Asistencia → Registrar asistencia**, seleccionar el evento y la fecha. Marcar presentes; los miembros restantes del listado quedan ausentes. Guardar. No se permite más de una lista para el mismo evento y fecha. Se puede editar una lista existente para corregirla. Los miembros previamente registrados en una lista siguen disponibles para corregir el historial aunque posteriormente se desactiven.
-
-## Ministerios
-
-Registrar nombre (por ejemplo Música, Jóvenes, Niños, Enseñanza o Servicio), coordinador y descripción. Marcar integrantes para vincularlos al ministerio. El listado muestra sus nombres. Para asociar una actividad, seleccionar el ministerio al crear o editar el evento. La sección de actividades agrupa los eventos próximos por ministerio.
+Primero registrar miembros y un evento activo. Elegir evento: se sugiere su fecha. Buscar miembros, marcar presentes o utilizar Marcar todos presentes/ausentes. La búsqueda no elimina miembros de la lista. Los no marcados quedan ausentes. Se muestra el total marcado. No se acepta una segunda lista para el mismo evento y fecha; editar la existente. Se puede corregir el historial de miembros posteriormente inactivos. No se crea asistencia nueva para eventos cancelados.
 
 ## Aportaciones
 
-Solo administrador y tesorero pueden acceder. Registrar fecha, monto positivo, concepto y método. Seleccionar un miembro o dejar **Anónima**. Los montos se muestran en pesos mexicanos. Para consultar un mes: **Reportes → Aportaciones → Mes actual → Consultar**. El total del periodo aparece sobre la tabla.
+Solo administrador y tesorero. Registrar fecha, monto positivo con dos decimales, concepto y método (efectivo, transferencia, tarjeta u otro). Elegir miembro o Anónima. Moneda: MXN. El panel muestra ingresos del mes, y reportes permite obtener el total de cualquier periodo. No se registran gastos ni se emiten comprobantes fiscales en esta versión.
 
 ## Comunicados
 
-Registrar título, fecha de publicación y contenido. Los comunicados con fecha futura permanecen en el listado administrativo y aparecen en el panel a partir de la fecha indicada. Se pueden editar y eliminar; la eliminación pide confirmación.
+Crear título, fecha y contenido. El panel muestra anuncios desde su fecha de publicación. Editar o eliminar; se pide confirmación antes de eliminar.
 
 ## Reportes
 
-Elegir miembros, asistencia, ministerios o aportaciones según permisos. Seleccionar fechas o utilizar últimos siete días / mes actual. Para asistencia, seleccionar un evento específico. Presionar **Consultar**.
+Elegir miembros, asistencia, ministerios o aportaciones según permisos. Filtrar Desde/Hasta, últimos siete días o mes actual. Para asistencia seleccionar evento; para participación seleccionar ministerio.
 
-- **Excel (.xlsx):** descarga un libro de Excel con los resultados filtrados. Las celdas se exportan como texto para evitar ejecutar fórmulas provenientes de datos de usuarios.
-- **Imprimir / PDF:** abre la impresión del navegador. Seleccionar Guardar como PDF. La hoja excluye navegación y botones.
+- Miembros: fecha de ingreso y datos de contacto/estado/familia.
+- Asistencia: presentes, ausentes, porcentaje y nombres por evento/fecha.
+- Ministerios: integrantes actuales, actividades del periodo, asistencias de integrantes en esas actividades y nombres.
+- Aportaciones: detalle y total del periodo.
 
-Los filtros de fecha se aplican a fecha de ingreso para miembros y a fecha de registro para asistencia y aportaciones. Los ministerios no tienen fecha propia: consultar ese reporte sin filtro de fechas.
+Descargar Excel genera .xlsx con encabezado institucional. Descargar PDF genera directamente un documento con logo y paginación. No requiere usar la impresión del navegador.
 
-## Configuración
-
-Solo administrador. Actualizar nombre, dirección, teléfono, correo, horarios y logotipo. Se admiten PNG, JPEG y WebP de hasta 500 KB. El nombre actualizado aparece en la cabecera y reportes. Los horarios son información institucional; no crean automáticamente eventos recurrentes.
-
+![Ejemplo de PDF con información ficticia](images/reporte-ejemplo.png)

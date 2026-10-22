@@ -6,8 +6,5 @@ if errorlevel 1 (
  pause
  exit /b 1
 )
-set HOST=127.0.0.1
-set PORT=3000
-start "" "http://127.0.0.1:3000"
-node server.js
+node launch.js
 pause

@@ -2,82 +2,173 @@ import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { loadEnvFile } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-const root=path.dirname(fileURLToPath(import.meta.url));
-mkdirSync(path.join(root,'data'),{recursive:true});
-const db=new DatabaseSync(process.env.DB_PATH||path.join(root,'data','church.sqlite'));
-db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
-CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,role TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),expires INTEGER);
-CREATE TABLE IF NOT EXISTS resets(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),expires INTEGER);
-CREATE TABLE IF NOT EXISTS records(id INTEGER PRIMARY KEY,kind TEXT NOT NULL,body TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);`);
-const roles=['administrador','pastor','secretario','tesorero','coordinador'];
-const permissions={members:['administrador','pastor','secretario'],events:['administrador','pastor','secretario','coordinador'],attendance:['administrador','pastor','secretario','coordinador'],ministries:['administrador','pastor','secretario','coordinador'],donations:['administrador','tesorero'],announcements:['administrador','pastor','secretario'],settings:['administrador'],users:['administrador']};
-const hash=p=>{const salt=randomBytes(16).toString('hex');return salt+':'+scryptSync(p,salt,64).toString('hex')};
-const valid=(p,h)=>{const [s,k]=h.split(':');return timingSafeEqual(scryptSync(p,s,64),Buffer.from(k,'hex'))};
-const digest=t=>createHash('sha256').update(t).digest('hex');
-const all=kind=>db.prepare('SELECT id,body FROM records WHERE kind=?').all(kind).map(r=>({...JSON.parse(r.body),id:r.id}));
-const save=(kind,b,id)=>id?db.prepare('UPDATE records SET body=? WHERE kind=? AND id=?').run(JSON.stringify(b),kind,id):db.prepare('INSERT INTO records(kind,body) VALUES(?,?)').run(kind,JSON.stringify(b));
-if(!db.prepare('SELECT id FROM settings').get())db.prepare('INSERT INTO settings VALUES(1,?)').run(JSON.stringify({name:'Siloé - Iglesia Presbiteriana',address:'',phone:'',email:'',schedule:'Domingos 10:00',logo:''}));
-const attempts=new Map();
-function throttle(ip){const now=Date.now(),v=attempts.get(ip)||{n:0,t:now};if(now-v.t>900000){v.n=0;v.t=now}v.n++;attempts.set(ip,v);if(v.n>30)throw Error('Demasiados intentos. Espera 15 minutos.')}
-function validate(kind,b){
- const required={members:['name','joined'],events:['title','date','time','place'],ministries:['name'],donations:['date','amount','concept','method'],announcements:['title','description','date'],attendance:['eventId','date','present','absent']}[kind]||[];
- for(const k of required)if(b[k]===undefined||b[k]==='')throw Error('Falta el campo: '+k);
- if(kind==='donations'&&(!Number.isFinite(Number(b.amount))||Number(b.amount)<=0))throw Error('El monto debe ser mayor que cero');
- if(b.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email))throw Error('Correo inválido');
- if(kind==='members'&&b.active&&!['Activo','Inactivo'].includes(b.active))throw Error('Estado de miembro inválido');
- if(kind==='events'&&b.status&&!['Programado','Cancelado'].includes(b.status))throw Error('Estado de evento inválido');
- if(kind==='events'&&b.ministryId&&!all('ministries').some(m=>m.id===Number(b.ministryId)))throw Error('Ministerio inexistente');
- if(kind==='ministries'&&(!Array.isArray(b.members||[])||(b.members||[]).some(id=>!all('members').some(m=>m.id===id))))throw Error('Integrantes inválidos');
- if(kind==='donations'&&b.memberId&&!all('members').some(m=>m.id===Number(b.memberId)))throw Error('Miembro inexistente');
- if(kind==='attendance'){
- if(!all('events').some(e=>e.id===Number(b.eventId)))throw Error('Evento inexistente');
- if(!Array.isArray(b.present)||!Array.isArray(b.absent))throw Error('Lista de asistencia inválida');
- const ids=new Set(all('members').map(m=>m.id));const both=[...b.present,...b.absent];if(new Set(both).size!==both.length||both.some(id=>!ids.has(id)))throw Error('Miembros de asistencia inválidos');
- }
-}
-async function jsonBody(req){let s='';for await(const c of req){s+=c;if(s.length>2e6)throw Error('Solicitud demasiado grande')}return JSON.parse(s||'{}')}
-const server=http.createServer(async(req,res)=>{
- res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','same-origin');
- res.setHeader('Content-Security-Policy',"default-src 'self'; img-src 'self' data: https://images.unsplash.com; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
- const send=(code,b)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(b))};
- try{
- const url=new URL(req.url,'http://localhost'),p=url.pathname,method=req.method;
- if(!p.startsWith('/api/')){const names={'/':'index.html','/app.js':'app.js','/export.js':'export.js','/style.css':'style.css'};const f=names[p];if(!f){res.writeHead(404);return res.end('No encontrado')}res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html; charset=utf-8');return res.end(readFileSync(path.join(root,'public',f)))}
- if(!['GET','HEAD'].includes(method)&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`&&req.headers.origin!==`https://${req.headers.host}`)return send(403,{error:'Origen rechazado'});
- if(p==='/api/status')return send(200,{setup:!db.prepare('SELECT id FROM users LIMIT 1').get()});
- if(p==='/api/setup'&&method==='POST'){
- if(db.prepare('SELECT id FROM users LIMIT 1').get())return send(403,{error:'Configuración ya realizada'});
- if(process.env.SETUP_TOKEN&&req.headers['x-setup-token']!==process.env.SETUP_TOKEN)return send(403,{error:'Token de instalación requerido'});
- const b=await jsonBody(req);if(!b.name||!/^\S+@\S+\.\S+$/.test(b.email)||b.password?.length<12)throw Error('Nombre, correo y contraseña de 12 caracteres requeridos');
- db.prepare('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)').run(b.name,b.email.toLowerCase(),hash(b.password),'administrador');return send(201,{ok:true});}
- if(p==='/api/login'&&method==='POST'){throttle(req.socket.remoteAddress);const b=await jsonBody(req),u=db.prepare('SELECT * FROM users WHERE email=?').get(String(b.email).toLowerCase());if(!u||!valid(String(b.password),u.password))return send(401,{error:'Correo o contraseña incorrectos'});const t=randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(digest(t),u.id,Date.now()+28800000);res.setHeader('Set-Cookie',`session=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${process.env.COOKIE_SECURE==='true'?'; Secure':''}`);return send(200,{ok:true})}
- if(p==='/api/forgot'&&method==='POST'){throttle(req.socket.remoteAddress);const b=await jsonBody(req),u=db.prepare('SELECT * FROM users WHERE email=?').get(String(b.email).toLowerCase());if(u){const t=randomBytes(32).toString('hex');db.prepare('DELETE FROM resets WHERE user_id=?').run(u.id);db.prepare('INSERT INTO resets VALUES(?,?,?)').run(digest(t),u.id,Date.now()+1800000);if(process.env.RESET_WEBHOOK){await fetch(process.env.RESET_WEBHOOK,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${process.env.RESET_WEBHOOK_SECRET||''}`},body:JSON.stringify({email:u.email,token:t,expiresMinutes:30})})}else console.log('Recuperación local para '+u.email+': '+t)}return send(200,{message:'Si el correo está registrado, recibirás instrucciones. En instalación local, consulta al administrador.'})}
- if(p==='/api/reset'&&method==='POST'){throttle(req.socket.remoteAddress);const b=await jsonBody(req),r=db.prepare('SELECT * FROM resets WHERE token=? AND expires>?').get(digest(String(b.token)),Date.now());if(!r||b.password?.length<12)throw Error('Token inválido o contraseña menor de 12 caracteres');db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(b.password),r.user_id);db.prepare('DELETE FROM resets WHERE user_id=?').run(r.user_id);db.prepare('DELETE FROM sessions WHERE user_id=?').run(r.user_id);return send(200,{ok:true})}
- const token=/session=([^;]+)/.exec(req.headers.cookie||'')?.[1]||'';
- const u=db.prepare('SELECT u.id,u.name,u.email,u.role FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>?').get(digest(token),Date.now());if(!u)return send(401,{error:'Inicia sesión'});
- if(p==='/api/me')return send(200,{...u,permissions:Object.keys(permissions).filter(k=>permissions[k].includes(u.role))});
- if(p==='/api/logout'){db.prepare('DELETE FROM sessions WHERE token=?').run(digest(token));res.setHeader('Set-Cookie','session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return send(200,{ok:true})}
- if(p==='/api/settings'){
- if(method==='GET')return send(200,JSON.parse(db.prepare('SELECT body FROM settings WHERE id=1').get().body));
- if(u.role!=='administrador')return send(403,{error:'Acceso restringido'});const b=await jsonBody(req);if(!b.name)throw Error('Nombre requerido');if(b.logo&&!/^data:image\/(png|jpeg|webp);base64,/.test(b.logo))throw Error('Usa logotipo PNG, JPEG o WebP');db.prepare('UPDATE settings SET body=? WHERE id=1').run(JSON.stringify(b));return send(200,{ok:true})}
- if(p==='/api/users'){
- if(u.role!=='administrador')return send(403,{error:'Acceso restringido'});
- if(method==='GET')return send(200,db.prepare('SELECT id,name,email,role FROM users').all());
- const b=await jsonBody(req);if(!b.name||!/^\S+@\S+\.\S+$/.test(b.email)||!roles.includes(b.role)||b.password?.length<12)throw Error('Revisa nombre, correo, rol y contraseña (12 caracteres)');db.prepare('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)').run(b.name,b.email.toLowerCase(),hash(b.password),b.role);return send(201,{ok:true})}
- const m=/^\/api\/(members|events|attendance|ministries|donations|announcements)(?:\/(\d+))?$/.exec(p);
- if(!m)return send(404,{error:'Ruta inexistente'});const kind=m[1],id=Number(m[2]);
- if(kind==='donations'&&!permissions.donations.includes(u.role))return send(403,{error:'Acceso financiero restringido'});
- if(method==='GET')return send(200,all(kind));
- if(!permissions[kind].includes(u.role))return send(403,{error:'Tu rol no permite esta operación'});
- if(id&&!db.prepare('SELECT id FROM records WHERE id=? AND kind=?').get(id,kind))return send(404,{error:'Registro inexistente'});
- if(method==='DELETE'){if(kind!=='announcements')throw Error('Utiliza desactivar o cancelar para conservar el historial');db.prepare('DELETE FROM records WHERE id=? AND kind=?').run(id,kind);return send(200,{ok:true})}
- if(!['POST','PUT'].includes(method))return send(405,{error:'Método no permitido'});
- const b=await jsonBody(req);delete b.id;validate(kind,b);if(kind==='attendance'&&all(kind).some(a=>a.id!==id&&Number(a.eventId)===Number(b.eventId)&&a.date===b.date))throw Error('Ya existe asistencia para este evento y fecha');const result=save(kind,b,id);return send(id?200:201,{ok:true,id:id||Number(result.lastInsertRowid)});
- }catch(e){send(400,{error:e.message.includes('UNIQUE')?'El correo ya está registrado':e.message})}
-});
-server.listen(Number(process.env.PORT)||3000,process.env.HOST||'127.0.0.1',()=>console.log('Aplicación disponible en http://localhost:'+(process.env.PORT||3000)));
+import sharp from 'sharp';
+import { roles, permissions, fail, text, validEmail, password, record, duplicate } from './lib/domain.js';
+import { deliverReset, mailStatus } from './lib/mail.js';
+import { previewImport } from './lib/import.js';
+import { report, reportPdf } from './lib/reports.js';
 
+const root = path.dirname(fileURLToPath(import.meta.url));
+if (existsSync(path.join(root, '.env'))) loadEnvFile(path.join(root, '.env'));
+mkdirSync(path.join(root, 'data'), { recursive: true });
+const db = new DatabaseSync(process.env.DB_PATH || path.join(root, 'data', 'church.sqlite'));
+db.exec(`PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+ CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,name TEXT NOT NULL,email TEXT UNIQUE NOT NULL,password TEXT NOT NULL,role TEXT NOT NULL,active INTEGER NOT NULL DEFAULT 1);
+ CREATE TABLE IF NOT EXISTS sessions(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),expires INTEGER);
+ CREATE TABLE IF NOT EXISTS resets(token TEXT PRIMARY KEY,user_id INTEGER REFERENCES users(id),expires INTEGER);
+ CREATE TABLE IF NOT EXISTS records(id INTEGER PRIMARY KEY,kind TEXT NOT NULL,body TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1),body TEXT NOT NULL);`);
+if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'active')) db.exec('ALTER TABLE users ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
+if (!db.prepare('SELECT id FROM settings').get()) db.prepare('INSERT INTO settings VALUES(1,?)').run(JSON.stringify({ name: 'Siloé - Iglesia Presbiteriana', address: '', phone: '', email: '', schedule: 'Domingos 10:00', logo: '', cover: '' }));
+
+const settings = () => JSON.parse(db.prepare('SELECT body FROM settings WHERE id=1').get().body);
+const digest = s => createHash('sha256').update(s).digest('hex');
+const hash = p => { const salt = randomBytes(16).toString('hex'); return salt + ':' + scryptSync(p, salt, 64).toString('hex'); };
+const valid = (p, value) => { const [salt, key] = value.split(':'); return timingSafeEqual(scryptSync(String(p), salt, 64), Buffer.from(key, 'hex')); };
+const all = kind => db.prepare('SELECT id,body FROM records WHERE kind=? ORDER BY id').all(kind).map(r => ({ ...JSON.parse(r.body), id: r.id }));
+const save = (kind, b, id) => id ? db.prepare('UPDATE records SET body=? WHERE kind=? AND id=?').run(JSON.stringify(b), kind, id) : db.prepare('INSERT INTO records(kind,body) VALUES(?,?)').run(kind, JSON.stringify(b));
+const attempts = new Map(), imports = new Map();
+function throttle(ip) {
+  const now = Date.now();
+  for (const [key, value] of attempts) if (now - value.t > 900000) attempts.delete(key);
+  const v = attempts.get(ip) || { n: 0, t: now }; v.n++; attempts.set(ip, v);
+  if (v.n > 30) fail('Demasiados intentos. Espera 15 minutos.', 429);
+}
+async function body(req) {
+  let size = 0; const chunks = [];
+  for await (const c of req) { size += c.length; if (size > 5e6) fail('La solicitud supera 5 MB.', 413); chunks.push(c); }
+  try { return JSON.parse(Buffer.concat(chunks).toString() || '{}'); } catch { fail('Solicitud JSON inválida.'); }
+}
+async function image(value, limit) {
+  if (!value) return '';
+  if (typeof value !== 'string' || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value)) fail('Usa una imagen PNG, JPG o WebP.');
+  const bytes = Buffer.from(value.split(',')[1], 'base64');
+  if (bytes.length > limit) fail(`La imagen supera ${limit / 1000} KB.`);
+  try { const png = await sharp(bytes, { limitInputPixels: 25000000 }).rotate().resize({ width: limit > 500000 ? 1600 : 512, height: limit > 500000 ? 1000 : 512, fit: 'inside', withoutEnlargement: true }).png().toBuffer(); return 'data:image/png;base64,' + png.toString('base64'); }
+  catch { fail('La imagen está dañada o tiene dimensiones excesivas.'); }
+}
+function newSession(res, id) {
+  const t = randomBytes(32).toString('hex'); db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(digest(t), id, Date.now() + 28800000);
+  res.setHeader('Set-Cookie', `session=${t}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${process.env.COOKIE_SECURE === 'true' ? '; Secure' : ''}`);
+}
+const server = http.createServer(async (req, res) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data: https://images.unsplash.com; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  const send = (code, data) => { res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
+  const download = (bytes, type, name) => { res.writeHead(200, { 'Content-Type': type, 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' }); res.end(bytes); };
+  try {
+    const url = new URL(req.url, 'http://localhost'), p = url.pathname, method = req.method;
+    if (p === '/health' && method === 'GET') return send(200, { ok: true, app: 'siloe', version: '2.0.0' });
+    if (!p.startsWith('/api/')) {
+      const paths = { '/': 'index.html', '/app.js': 'app.js', '/export.js': 'export.js', '/style.css': 'style.css' };
+      const f = paths[p]; if (!f || method !== 'GET') return send(404, { error: 'No encontrado' });
+      res.setHeader('Content-Type', f.endsWith('.js') ? 'text/javascript; charset=utf-8' : f.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache'); return res.end(readFileSync(path.join(root, 'public', f)));
+    }
+    if (method !== 'GET' && req.headers.origin && ![`http://${req.headers.host}`, `https://${req.headers.host}`, process.env.APP_URL].filter(Boolean).includes(req.headers.origin)) fail('Origen rechazado.', 403);
+    if (p === '/api/branding' && method === 'GET') { const s = settings(); return send(200, { name: s.name, logo: s.logo || '', cover: s.cover || '' }); }
+    if (p === '/api/status' && method === 'GET') return send(200, { version: '2.0.0', setup: !db.prepare('SELECT id FROM users LIMIT 1').get(), setupTokenRequired: Boolean(process.env.SETUP_TOKEN) });
+    if (p === '/api/setup' && method === 'POST') {
+      if (db.prepare('SELECT id FROM users LIMIT 1').get()) fail('Configuración ya realizada.', 403);
+      if (process.env.SETUP_TOKEN && req.headers['x-setup-token'] !== process.env.SETUP_TOKEN) fail('Token de instalación incorrecto.', 403);
+      const b = await body(req); if (!text(b.name) || !validEmail(text(b.email))) fail('Nombre y correo válidos requeridos.');
+      db.prepare('INSERT INTO users(name,email,password,role) VALUES(?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), 'administrador'); return send(201, { ok: true });
+    }
+    if (p === '/api/login' && method === 'POST') {
+      throttle(req.socket.remoteAddress); const b = await body(req), u = db.prepare('SELECT * FROM users WHERE email=? AND active=1').get(text(b.email).toLowerCase());
+      if (!u || !valid(b.password, u.password)) fail('Correo o contraseña incorrectos.', 401);
+      db.prepare('DELETE FROM sessions WHERE expires<?').run(Date.now()); newSession(res, u.id); return send(200, { ok: true });
+    }
+    if (p === '/api/forgot' && method === 'POST') {
+      throttle(req.socket.remoteAddress); const b = await body(req), u = db.prepare('SELECT * FROM users WHERE email=? AND active=1').get(text(b.email).toLowerCase());
+      if (u) {
+        const t = randomBytes(32).toString('hex'); db.prepare('DELETE FROM resets WHERE user_id=?').run(u.id); db.prepare('INSERT INTO resets VALUES(?,?,?)').run(digest(t), u.id, Date.now() + 1800000);
+        try { await deliverReset(u, t, settings().name); } catch { db.prepare('DELETE FROM resets WHERE user_id=?').run(u.id); console.error('No se pudo entregar un correo de recuperación. Revisa la configuración del servidor.'); }
+      }
+      return send(200, { message: 'Si la cuenta está activa, recibirás instrucciones por el medio configurado. Si no llegan, consulta al administrador.' });
+    }
+    if (p === '/api/reset' && method === 'POST') {
+      throttle(req.socket.remoteAddress); const b = await body(req), r = db.prepare('SELECT r.* FROM resets r JOIN users u ON u.id=r.user_id WHERE r.token=? AND r.expires>? AND u.active=1').get(digest(text(b.token)), Date.now());
+      if (!r) fail('El código es inválido o ha caducado.');
+      db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(password(b.password)), r.user_id); db.prepare('DELETE FROM resets WHERE user_id=?').run(r.user_id); db.prepare('DELETE FROM sessions WHERE user_id=?').run(r.user_id); return send(200, { ok: true });
+    }
+    const token = /(?:^|;\s*)session=([^;]+)/.exec(req.headers.cookie || '')?.[1] || '';
+    const u = db.prepare('SELECT u.id,u.name,u.email,u.role,u.active FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.token=? AND s.expires>? AND u.active=1').get(digest(token), Date.now());
+    if (!u) fail('Inicia sesión.', 401);
+    const can = kind => { if (!permissions[kind]?.includes(u.role)) fail('Tu rol no permite esta operación.', 403); };
+    if (p === '/api/me' && method === 'GET') return send(200, { ...u, permissions: Object.keys(permissions).filter(k => permissions[k].includes(u.role)) });
+    if (p === '/api/logout' && method === 'POST') { db.prepare('DELETE FROM sessions WHERE token=?').run(digest(token)); res.setHeader('Set-Cookie', 'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'); return send(200, { ok: true }); }
+    if (p === '/api/account/password' && method === 'POST') {
+      const b = await body(req), own = db.prepare('SELECT password FROM users WHERE id=?').get(u.id); if (!valid(b.current, own.password)) fail('La contraseña actual no es correcta.');
+      db.prepare('UPDATE users SET password=? WHERE id=?').run(hash(password(b.password)), u.id); db.prepare('DELETE FROM sessions WHERE user_id=?').run(u.id); return send(200, { ok: true });
+    }
+    if (p === '/api/settings') {
+      if (method === 'GET') return send(200, settings()); can('settings'); if (method !== 'PUT') fail('Método no permitido.', 405);
+      const b = await body(req); if (!text(b.name) || text(b.name).length > 120) fail('El nombre debe tener entre 1 y 120 caracteres.');
+      if (b.email && !validEmail(text(b.email))) fail('Correo de contacto inválido.');
+      const next = Object.fromEntries(['name', 'address', 'phone', 'email', 'schedule'].map(k => [k, text(b[k])]));
+      if (next.address.length > 300 || next.schedule.length > 1500 || next.phone.length > 40) fail('La dirección, teléfono u horarios son demasiado largos.');
+      const previous = settings(); next.logo = b.logo === previous.logo ? previous.logo : await image(b.logo, 500000); next.cover = b.cover === previous.cover ? previous.cover : await image(b.cover, 2000000);
+      db.prepare('UPDATE settings SET body=? WHERE id=1').run(JSON.stringify(next)); return send(200, { ok: true });
+    }
+    if (p === '/api/system' && method === 'GET') { can('settings'); return send(200, { mail: { ...mailStatus(), configured: mailStatus().configured || Boolean(process.env.RESET_WEBHOOK) }, production: process.env.NODE_ENV === 'production' }); }
+    const usersMatch = /^\/api\/users(?:\/(\d+))?$/.exec(p);
+    if (usersMatch) {
+      can('users'); const id = Number(usersMatch[1]);
+      if (method === 'GET' && !id) return send(200, db.prepare('SELECT id,name,email,role,active FROM users ORDER BY id').all());
+      if (!(method === 'POST' && !id || method === 'PUT' && id)) fail('Método no permitido.', 405);
+      const b = await body(req); if (!text(b.name) || text(b.name).length > 160 || !validEmail(text(b.email)) || !roles.includes(b.role)) fail('Revisa nombre, correo y rol.');
+      const active = b.active === false || b.active === 0 || b.active === 'Inactivo' ? 0 : 1;
+      if (id) {
+        const old = db.prepare('SELECT * FROM users WHERE id=?').get(id); if (!old) fail('Usuario inexistente.', 404);
+        if (old.role === 'administrador' && old.active && (!active || b.role !== 'administrador') && db.prepare("SELECT COUNT(*) AS n FROM users WHERE role='administrador' AND active=1").get().n <= 1) fail('Debe quedar al menos un administrador activo.');
+        const pass = b.password ? hash(password(b.password)) : old.password;
+        db.prepare('UPDATE users SET name=?,email=?,role=?,active=?,password=? WHERE id=?').run(text(b.name), text(b.email).toLowerCase(), b.role, active, pass, id);
+        if (old.role !== b.role || !active || b.password) { db.prepare('DELETE FROM sessions WHERE user_id=?').run(id); db.prepare('DELETE FROM resets WHERE user_id=?').run(id); }
+      } else db.prepare('INSERT INTO users(name,email,password,role,active) VALUES(?,?,?,?,?)').run(text(b.name), text(b.email).toLowerCase(), hash(password(b.password)), b.role, active);
+      return send(id ? 200 : 201, { ok: true });
+    }
+    if (p === '/api/members/import/preview' && method === 'POST') {
+      can('members'); const preview = await previewImport(await body(req), all('members'));
+      for (const [k, v] of imports) if (v.expires < Date.now() || v.userId === u.id) imports.delete(k);
+      const t = randomBytes(24).toString('hex'); imports.set(t, { userId: u.id, rows: preview.rows.filter(r => r.status === 'listo').map(r => r.member), expires: Date.now() + 600000 }); return send(200, { ...preview, token: t });
+    }
+    if (p === '/api/members/import/commit' && method === 'POST') {
+      can('members'); const b = await body(req), batch = imports.get(b.token);
+      if (!batch || batch.expires < Date.now() || batch.userId !== u.id) fail('La vista previa caducó. Vuelve a cargar el archivo.');
+      let imported = 0, skipped = 0; db.exec('BEGIN IMMEDIATE');
+      try { for (const input of batch.rows) { const m = record('members', input, all); if (duplicate(m, all('members'))) { skipped++; continue; } save('members', m); imported++; } db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; }
+      imports.delete(b.token); return send(201, { ok: true, imported, skipped });
+    }
+    const reportMatch = /^\/api\/reports\/(members|attendance|ministries|donations)(\/pdf)?$/.exec(p);
+    if (reportMatch && method === 'GET') {
+      if (reportMatch[1] === 'donations') can('donations');
+      const info = report(reportMatch[1], url.searchParams, all);
+      if (reportMatch[2]) return download(await reportPdf(info, settings()), 'application/pdf', `reporte-${reportMatch[1]}.pdf`);
+      return send(200, info);
+    }
+    const m = /^\/api\/(members|events|attendance|ministries|donations|announcements)(?:\/(\d+))?$/.exec(p);
+    if (!m) fail('Ruta inexistente.', 404);
+    const kind = m[1], id = Number(m[2]); if (kind === 'donations') can(kind);
+    if (method === 'GET' && !id) return send(200, all(kind)); can(kind);
+    if (id && !db.prepare('SELECT id FROM records WHERE id=? AND kind=?').get(id, kind)) fail('Registro inexistente.', 404);
+    if (method === 'DELETE') { if (kind !== 'announcements' || !id) fail('Utiliza desactivar o cancelar para conservar el historial.'); db.prepare('DELETE FROM records WHERE id=? AND kind=?').run(id, kind); return send(200, { ok: true }); }
+    if (!(method === 'POST' && !id || method === 'PUT' && id)) fail('Método no permitido.', 405);
+    const input = await body(req), b = record(kind, input, all);
+    if (kind === 'members') { const match = duplicate(b, all(kind), id); if (match && input.confirmDuplicate !== true) fail(`Posible duplicado: ${match.name}. Revisa el registro existente.`, 409, { duplicateId: match.id }); }
+    if (kind === 'attendance') {
+      if (all(kind).some(a => a.id !== id && Number(a.eventId) === b.eventId && a.date === b.date)) fail('Ya existe asistencia para este evento y fecha.');
+      const event = all('events').find(e => e.id === b.eventId); if (event.status === 'Cancelado' && !id) fail('No puedes registrar asistencia nueva en un evento cancelado.');
+    }
+    const result = save(kind, b, id); return send(id ? 200 : 201, { ok: true, id: id || Number(result.lastInsertRowid) });
+  } catch (e) {
+    if (res.headersSent) return res.destroy();
+    send(e.status || 400, { error: e.message.includes('UNIQUE') ? 'El correo ya está registrado.' : e.message, ...(e.details ? { details: e.details } : {}) });
+  }
+});
+server.requestTimeout = 30000;
+server.listen(process.env.PORT === '0' ? 0 : Number(process.env.PORT) || 3000, process.env.HOST || '127.0.0.1', () => console.log(`Aplicación disponible en http://127.0.0.1:${server.address().port}`));
+server.on('error', e => { console.error(e.code === 'EADDRINUSE' ? 'El puerto está ocupado. Cierra la otra instancia o cambia PORT en .env.' : e.message); process.exitCode = 1; });

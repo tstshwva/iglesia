@@ -1,36 +1,25 @@
-# Validación de la entrega
+# Validación · versión 2
 
-## Comprobaciones realizadas
+## Evidencia automatizada
 
-- Análisis de sintaxis del servidor y JavaScript de interfaz: satisfactorio.
-- Prueba de integración `npm test`: satisfactoria.
-- Configuración inicial de un solo uso y contraseña mínima.
-- Inicio de sesión correcto / incorrecto y cierre de sesión.
-- API sin sesión rechazada.
-- Permisos de escritura y restricciones financieras para cinco roles.
-- Persistencia de miembro inactivo y bloqueo de eliminación permanente.
-- Asistencia por evento y prevención de duplicados.
-- Aportación anónima aceptada y monto negativo rechazado.
+npm test ejecuta tres pruebas: formato Excel, integración original y escenarios ampliados. Se usan bases temporales y no se cambian los datos reales.
 
-## Pendientes y límites
+Escenarios comprobados: configuración inicial, inicio/cierre, contraseñas, cinco roles, bloqueo financiero (también reportes), desactivación de miembros, prevención de asistencias duplicadas, montos positivos, migración desde tabla users sin estado, identidad pública limitada, imágenes válidas/dañadas, duplicados normalizados, importación .xlsx con filas válidas/duplicadas/erróneas, consumo único de revisión, participación por ministerio, periodos inválidos, total financiero, descarga PDF, último administrador protegido, cambio de rol con revocación, usuario inactivo y **entrega de recuperación a un receptor SMTP local** con canje del enlace.
 
-La vista en el navegador integrado no consiguió acceder al servidor local: conexión agotada. No se certifica todavía la revisión visual, la impresión PDF ni el comportamiento móvil por una prueba de navegador. La fotografía incluida es ilustrativa, no una captura de la aplicación.
+## PDF y Excel
 
-El envío real de recuperación por correo requiere configurar un proveedor. La exportación Excel nativa fue comprobada con openpyxl. Los eventos pueden asociarse con un ministerio; el calendario principal muestra todos. No hay envío de anuncios por correo ni acceso público de miembros.
+Libro .xlsx comprobado por pruebas de estructura y apertura con openpyxl en la primera entrega. PDF de 25 miembros ficticios: cuatro páginas, todos los nombres extraídos y primera página renderizada e inspeccionada con Poppler. Incluye logo, nombre, datos institucionales y numeración. La imagen en images/reporte-ejemplo.png procede de ese PDF, no de una pantalla inventada.
 
-## Lista de revisión manual en el equipo
+## Inicio local
 
-1. Ejecutar iniciar.cmd y crear administrador.
-2. Configurar institución y cargar logotipo.
-3. Crear usuarios de cada rol y revisar visibilidad de finanzas.
-4. Registrar miembros, buscar, filtrar y desactivar.
-5. Crear evento, revisar calendario y cancelar.
-6. Registrar/corregir asistencia y consultar periodos.
-7. Crear ministerio y vincular miembros.
-8. Registrar aportación nominativa y anónima.
-9. Publicar, editar y eliminar comunicado.
-10. Generar Excel y PDF; probar en pantalla pequeña.
-11. Capturar pantallas reales de acceso, panel, miembros, calendario y reportes para adjuntar al manual.
+El iniciador se ejecutó con 3000 ocupado: seleccionó 3001 y comprobó satisfactoriamente /health. Se corrigió la reinstalación automática npm ci que causaba EPERM al encontrar una DLL abierta. Ahora las dependencias existentes se conservan y únicamente se instalan si faltan.
 
-No incluir datos personales reales, correos privados ni montos sensibles en capturas destinadas al repositorio público.
+## Límites de validación
 
+El navegador integrado no accedió a procesos locales de prueba. Por ello, no se certifica aún la revisión completa de pantallas, flujos ni tamaños móviles, y no se presentan capturas ficticias como evidencia. La adaptación móvil está implementada en CSS pero requiere comprobación visual. El error de versión anterior recibió una explicación específica en pantalla y un iniciador que evita puertos ocupados.
+
+No se ha probado el correo de la iglesia con credenciales reales, ni un despliegue público o la imagen Docker. Esas comprobaciones requieren proveedor SMTP y alojamiento. Están documentadas como pendientes externos.
+
+## Revisión manual pendiente en equipo del usuario
+
+Acceso → subir logo/portada → verificar identidad → registro rápido y Guardar y agregar otro → duplicados → importar plantilla → editar/desactivar usuario → registrar/cancelar evento → asistencia → ministerio → aportaciones → comunicados → filtros y descargas → pantalla pequeña. Capturar esas pantallas sin información personal para completar el manual ilustrado.

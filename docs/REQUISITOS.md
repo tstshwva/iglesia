@@ -1,31 +1,32 @@
-# Matriz de requisitos y aceptación
+# Requisitos RF-01 a RF-10
 
-| RF | Implementación | Criterio de aceptación / límite |
+| RF | Funciones implementadas | Validación / configuración |
 |---|---|---|
-| RF-01 | Primer administrador, alta de usuarios por administrador, correo/contraseña, cierre de sesión, cinco roles, tokens de recuperación | Solicitudes sin sesión devuelven 401; operaciones fuera del rol devuelven 403. Envío de recuperación por correo pendiente de configurar proveedor. |
-| RF-02 | Alta, consulta, edición, nombre/teléfono/correo/ingreso, búsqueda, filtro, desactivación | Desactivar conserva el registro. La API rechaza eliminar un miembro. |
-| RF-03 | Asistencia por evento y fecha, presentes/ausentes, edición, historial y filtros semanales/mensuales | No permite duplicar evento-fecha ni incluir miembros inexistentes. |
-| RF-04 | Alta, edición y cancelación de eventos, responsable, calendario mensual | Cancelado permanece en historial y se excluye de próximos eventos. |
-| RF-05 | Ministerios, coordinador e integrantes | Miembros y eventos vinculados al ministerio mediante identificadores. La vista muestra sus actividades próximas. |
-| RF-06 | Aportaciones, fecha/monto/concepto/método, anónimos, resumen por periodo | Solo administrador y tesorero acceden a la API financiera; montos positivos. |
-| RF-07 | Publicar, editar y eliminar anuncios con fecha | El panel muestra únicamente anuncios cuya publicación ya inició. |
-| RF-08 | Totales, próximos eventos, ingresos según rol y gráfica de asistencia | Cálculos a partir de los registros guardados; sin datos ficticios. |
-| RF-09 | Tablas de miembros, asistencia por evento, integrantes por ministerio e ingresos por periodo | Descarga Excel nativo (.xlsx); PDF por impresión. |
-| RF-10 | Nombre, logotipo, dirección, contacto y horarios | Solo el administrador actualiza la configuración; persistencia en SQLite. |
+| RF-01 | Correo y contraseña, alta/edición/desactivación, roles, cierre, cambio personal y recuperación SMTP | Autorización de API, invalidación de sesiones, último administrador protegido. Entrega SMTP probada localmente; falta configurar correo real. |
+| RF-02 | Alta rápida, edición, listado, nombre/teléfono/correo/ingreso, búsqueda, estados y baja lógica | Duplicados advertidos con confirmación para homónimos. Excel/CSV con revisión previa. |
+| RF-03 | Evento y fecha, presentes/ausentes, edición e historial | Búsqueda, marcado masivo, reporte semanal/mensual, porcentaje y nombres. No duplica evento-fecha. |
+| RF-04 | Crear, modificar y cancelar, responsable, lugar, descripción y calendario mensual | Historial conservado; no acepta asistencia nueva en cancelados. |
+| RF-05 | Ministerios, coordinadores, integrantes y actividades vinculadas | Reporte de integrantes, actividades y asistencias en actividades del ministerio por periodo. |
+| RF-06 | Fecha/monto/concepto/método, aportantes opcionales, anónimos y resumen mensual | Acceso financiero exclusivamente administrador/tesorero, incluso vía API de reportes. |
+| RF-07 | Alta, edición, eliminación y fecha de publicación | Anuncios futuros no se muestran todavía en el panel. |
+| RF-08 | Activos, próximos eventos, asistencias, ministerios, ingresos y gráficas | Gráficas de asistencia, ingreso de miembros e ingresos mensuales según rol. |
+| RF-09 | Miembros, asistencia por evento, participación por ministerio e ingresos por periodo | Excel nativo y PDF directo con logo. Filtros se validan en servidor. |
+| RF-10 | Nombre, logo, portada, dirección, contacto y horarios | Identidad dinámica en acceso, navegación y reportes. Subida, vista previa y retirada de imágenes. |
 
-## Permisos
-
-Todos los roles autenticados pueden consultar miembros, eventos, asistencia, ministerios y comunicados, además de sus reportes. La tabla indica permisos de escritura:
+## Permisos de escritura
 
 | Módulo | Administrador | Pastor | Secretario | Tesorero | Coordinador |
 |---|---|---|---|---|---|
-| Miembros | Sí | Sí | Sí | No | No |
+| Miembros / importación | Sí | Sí | Sí | No | No |
 | Eventos | Sí | Sí | Sí | No | Sí |
 | Asistencia | Sí | Sí | Sí | No | Sí |
 | Ministerios | Sí | Sí | Sí | No | Sí |
-| Aportaciones (leer/escribir) | Sí | No | No | Sí | No |
+| Aportaciones: consulta y escritura | Sí | No | No | Sí | No |
 | Comunicados | Sí | Sí | Sí | No | No |
 | Usuarios / configuración | Sí | No | No | No | No |
 
-El coordinador puede operar todos los ministerios: esta versión no limita a un coordinador a un único grupo. La política se define en el servidor y no depende de esconder botones.
+Todos los roles autenticados consultan módulos no financieros y sus reportes. El acceso financiero no se obtiene ocultando botones: lo comprueba el servidor en todas sus rutas. Cada usuario puede cambiar su propia contraseña.
 
+## Dependencias externas y aceptación
+
+El código está implementado; una entrega operativa en internet también necesita dominio/HTTPS, alojamiento con disco persistente y datos SMTP reales. Las pruebas de servidor y PDF son evidencia automatizada/visual, pero no sustituyen la aceptación de todas las pantallas en el navegador del usuario. Ver VALIDACION.md.

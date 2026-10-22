@@ -1,51 +1,53 @@
-# Instalación y operación
+# Instalación, operación y alojamiento
 
-## Entorno local
+## Inicio local
 
-Instalar Node.js >=24, ejecutar `iniciar.cmd` o `npm start` y navegar a http://127.0.0.1:3000. No cerrar la terminal mientras se usa la aplicación. Para detener, presionar Ctrl+C en la terminal. Si otro programa utiliza el puerto, establecer `PORT` con otro valor y abrir la dirección correspondiente.
+Node.js >=24. Ejecutar iniciar.cmd (doble clic) o .\iniciar.cmd desde PowerShell en la carpeta. El iniciador busca dependencias; si faltan, usa npm install. Si ya existen, no las reinstala. Busca un puerto libre entre PORT y PORT+20, escucha únicamente en 127.0.0.1 y abre el navegador al comprobar /health. Mantener abierta la ventana.
 
-Ejemplo en PowerShell:
+Para desarrollo directo: npm install una vez y npm start. Esto usa PORT=3000 por defecto y no elige automáticamente otro puerto.
 
-```powershell
-$env:PORT='4317'
-npm start
-```
+## Errores habituales
 
-El host predeterminado es 127.0.0.1, accesible únicamente desde el equipo. El navegador integrado de una herramienta puede estar aislado de este servidor; en ese caso utilizar el navegador del propio equipo después de ejecutar el iniciador.
+- PowerShell no reconoce iniciar.cmd: usar .\iniciar.cmd y comprobar la carpeta actual.
+- Ruta inexistente / servidor de versión anterior: pestaña conectada a proceso viejo. Ejecutar el iniciador actualizado y usar la nueva dirección indicada.
+- EPERM al reemplazar libvips DLL: npm ci intentó borrar una biblioteca abierta. Cerrar instancias de esta aplicación antes de una instalación limpia. El iniciador actualizado no realiza npm ci al arrancar.
+- Puerto ocupado: el iniciador selecciona otro automáticamente; npm start solicita cambiar PORT o cerrar la instancia anterior.
+- Navegador integrado sin acceso a localhost: probar el navegador del propio equipo. No modificar el firewall ni exponer la aplicación a toda la red como solución automática.
 
-## Variables de entorno
+## Configuración privada
 
-`.env.example` enumera los nombres; copiarlo a `.env` no carga las variables automáticamente. Configurarlas en el entorno del proceso o proveedor de alojamiento. Nunca subir secretos.
+Copiar .env.example a .env y ajustar valores. El servidor y el iniciador lo cargan automáticamente. Variables ya definidas en el entorno tienen prioridad. .env nunca se sube a GitHub.
 
-| Nombre | Uso |
+| Variable | Uso |
 |---|---|
-| PORT | Puerto HTTP, 3000 por defecto |
-| HOST | Dirección de escucha, 127.0.0.1 por defecto |
-| DB_PATH | Ruta de base de datos; directorio padre debe existir |
-| COOKIE_SECURE | `true` con HTTPS |
-| SETUP_TOKEN | Protección opcional de la configuración inicial mediante cabecera X-Setup-Token |
-| RESET_WEBHOOK | Endpoint privado para enviar token por correo |
-| RESET_WEBHOOK_SECRET | Bearer para autenticar el servicio de correo |
+| HOST / PORT | Dirección / puerto del servidor; el iniciador local limita HOST a 127.0.0.1 |
+| APP_URL | Dirección que recibirán los enlaces de recuperación |
+| COOKIE_SECURE | true en HTTPS |
+| NODE_ENV | production para alojamiento; development local |
+| DB_PATH | Archivo SQLite; directorio padre debe existir |
+| SETUP_TOKEN | Token privado para el alta inicial; el formulario lo solicita |
+| SMTP_HOST / SMTP_PORT | Servidor y puerto de correo; habitual 587 o 465 |
+| SMTP_USER / SMTP_PASSWORD | Credenciales privadas o contraseña de aplicación del proveedor |
+| MAIL_FROM | Remitente autorizado por el proveedor |
+| SMTP_REQUIRE_TLS | true; false solamente para receptor local de pruebas |
+| RESET_WEBHOOK / RESET_WEBHOOK_SECRET | Alternativa de servicio privado que envía correo |
 
-Si se configura SETUP_TOKEN, el formulario inicial no envía esa cabecera: crear el administrador mediante una llamada API autorizada o realizar la configuración local antes del despliegue. No publicar un servidor sin configurar su administrador.
+## Recuperación por correo real
 
-## Recuperación por correo
+Configurar SMTP, remitente y APP_URL. En puerto 465 se utiliza TLS desde el inicio; en 587 se solicita STARTTLS. No se deshabilita la validación de certificados. En producción se exige TLS. Reiniciar el servidor y revisar Configuración → Recuperación por correo. El indicador confirma que hay parámetros, no garantiza por sí solo la entrega al destinatario.
 
-El servicio `RESET_WEBHOOK` recibe un POST con `{email, token, expiresMinutes:30}` y Authorization Bearer. Debe enviar el token a esa dirección y responder satisfactoriamente. No se provee un proveedor de correo ni credenciales en esta entrega. Sin configuración se imprime el token en la terminal para desarrollo; proteger los registros y no utilizar ese modo en producción.
+El mensaje contiene enlace al formulario y código. Token de 30 minutos, un uso, almacenado como hash. La API responde de forma genérica para no revelar cuentas y registra fallos sin credenciales ni tokens. Sin proveedor, solo en desarrollo se imprime el código para pruebas. No se envió correo real durante la validación: se usó un receptor SMTP local.
 
-## Respaldo y restauración
+## Respaldar y restaurar
 
-1. Detener el proceso Node.
-2. Copiar la carpeta `data/` a almacenamiento privado y protegido.
-3. Reiniciar el servidor.
-4. Para restaurar, detener, conservar copia del estado actual y reemplazar `data/` por el respaldo.
+Detener todas las instancias, copiar data/ completa a almacenamiento privado y reiniciar. Para restaurar, detener, conservar copia del estado actual, reemplazar data/ por el respaldo y abrir nuevamente. La migración añade active a cuentas antiguas con valor activo y conserva los registros. Probar la restauración antes de depender de ella.
 
-Comprobar la restauración antes de depender de una copia. No subir esa carpeta a GitHub.
+## Alojamiento con Docker
 
-## Alojamiento
+Se incluye Dockerfile con Node.js 24, proceso sin privilegios, comprobación de salud y directorio /app/data. Elegir un servidor que admita disco persistente para SQLite. Montar un volumen en /app/data, configurar APP_URL HTTPS, COOKIE_SECURE=true, NODE_ENV=production, SETUP_TOKEN y SMTP desde secretos del proveedor. Configurar dominio y proxy HTTPS antes de uso real. No incluir .env ni la base en la imagen.
 
-Requiere un servidor Node.js con volumen persistente para SQLite y proxy HTTPS. GitHub aloja el código; GitHub Pages no ejecuta este servidor. Configurar variables, respaldos y dominio en el proveedor elegido. No se ha contratado ni desplegado alojamiento externo en esta entrega.
+El Dockerfile no ha sido ejecutado en este equipo porque Docker no forma parte de la validación disponible. No se ha creado una cuenta, contratado un servicio ni desplegado en internet. GitHub Pages no ejecuta Node.js/SQLite. El repositorio y el despliegue son servicios distintos.
 
-## Actualizaciones de GitHub
+## Actualizar
 
-Revisar cambios, ejecutar `npm test`, confirmar con Git y subir al repositorio. Las actualizaciones son explícitas por entrega; no existe sincronización automática en segundo plano. Para subir desde este equipo es necesario autenticar GitHub y tener permiso de escritura sobre `tstshwva/iglesia`.
+Respaldar datos. Cerrar instancias, descargar los cambios, ejecutar npm install si hay nuevas dependencias y abrir iniciar.cmd. Para activar pruebas en GitHub, copiar docs/github-actions-ejemplo.yml a .github/workflows/tests.yml desde una sesión con permisos workflow. La autorización utilizada en esta entrega no permite crear workflows; la plantilla no está activa. Las subidas del agente son por entrega, no una automatización permanente.
