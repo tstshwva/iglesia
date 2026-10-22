@@ -12,6 +12,7 @@ Se eligió Node.js 24 con módulos integrados para reducir instalación y depend
 - `public/index.html`: documento de entrada.
 - `public/app.js`: vistas, formularios, calendario, consultas y exportación.
 - `public/style.css`: diseño adaptable y reglas de impresión.
+- `public/export.js`: creación de libros Excel nativos, sin dependencias.
 - `test/integration.test.js`: integración sobre base temporal.
 - `data/`: información local excluida de Git.
 
@@ -50,6 +51,7 @@ Los módulos se indican con los nombres técnicos de `records`. Códigos: 200 é
 
 ## Seguridad implementada
 
-Contraseñas derivadas con scrypt y sal aleatoria, comparación de tiempo constante, sesiones aleatorias, autorización en servidor, consultas parametrizadas, escape de texto en HTML, comprobación de origen, política CSP y protección contra fórmulas al exportar CSV. Límite básico de intentos por dirección en memoria. La API financiera rechaza usuarios no autorizados antes de consultar datos.
+Contraseñas derivadas con scrypt y sal aleatoria, comparación de tiempo constante, sesiones aleatorias, autorización en servidor, consultas parametrizadas, escape de texto en HTML, comprobación de origen, política CSP y exportación Excel con celdas de texto para impedir fórmulas. Límite básico de intentos por dirección en memoria. La API financiera rechaza usuarios no autorizados antes de consultar datos.
 
 Antes de exposición pública: HTTPS, cookie Secure, servicio de correo privado, instalación inicial controlada, permisos de archivos y copias de seguridad. No incluye segundo factor, auditoría completa, gestión de sesiones entre múltiples instancias ni administración de bajas de usuarios. No usar varias instancias del servidor sobre archivos SQLite diferentes.
+

@@ -32,7 +32,7 @@ Primero registrar los miembros y el evento. En **Asistencia → Registrar asiste
 
 ## Ministerios
 
-Registrar nombre (por ejemplo Música, Jóvenes, Niños, Enseñanza o Servicio), coordinador y descripción. Marcar integrantes para vincularlos al ministerio. El listado muestra sus nombres. La sección de actividades muestra el calendario general; la asociación de una actividad concreta con un ministerio se documenta en el evento mediante su descripción y responsable.
+Registrar nombre (por ejemplo Música, Jóvenes, Niños, Enseñanza o Servicio), coordinador y descripción. Marcar integrantes para vincularlos al ministerio. El listado muestra sus nombres. Para asociar una actividad, seleccionar el ministerio al crear o editar el evento. La sección de actividades agrupa los eventos próximos por ministerio.
 
 ## Aportaciones
 
@@ -46,7 +46,7 @@ Registrar título, fecha de publicación y contenido. Los comunicados con fecha 
 
 Elegir miembros, asistencia, ministerios o aportaciones según permisos. Seleccionar fechas o utilizar últimos siete días / mes actual. Para asistencia, seleccionar un evento específico. Presionar **Consultar**.
 
-- **Excel (CSV):** descarga una tabla UTF-8 que abre Excel. Si Excel no separa las columnas automáticamente, usar Datos → Desde texto/CSV y seleccionar coma como separador.
+- **Excel (.xlsx):** descarga un libro de Excel con los resultados filtrados. Las celdas se exportan como texto para evitar ejecutar fórmulas provenientes de datos de usuarios.
 - **Imprimir / PDF:** abre la impresión del navegador. Seleccionar Guardar como PDF. La hoja excluye navegación y botones.
 
 Los filtros de fecha se aplican a fecha de ingreso para miembros y a fecha de registro para asistencia y aportaciones. Los ministerios no tienen fecha propia: consultar ese reporte sin filtro de fechas.
@@ -54,3 +54,4 @@ Los filtros de fecha se aplican a fecha de ingreso para miembros y a fecha de re
 ## Configuración
 
 Solo administrador. Actualizar nombre, dirección, teléfono, correo, horarios y logotipo. Se admiten PNG, JPEG y WebP de hasta 500 KB. El nombre actualizado aparece en la cabecera y reportes. Los horarios son información institucional; no crean automáticamente eventos recurrentes.
+

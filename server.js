@@ -28,6 +28,11 @@ function validate(kind,b){
  for(const k of required)if(b[k]===undefined||b[k]==='')throw Error('Falta el campo: '+k);
  if(kind==='donations'&&(!Number.isFinite(Number(b.amount))||Number(b.amount)<=0))throw Error('El monto debe ser mayor que cero');
  if(b.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.email))throw Error('Correo inválido');
+ if(kind==='members'&&b.active&&!['Activo','Inactivo'].includes(b.active))throw Error('Estado de miembro inválido');
+ if(kind==='events'&&b.status&&!['Programado','Cancelado'].includes(b.status))throw Error('Estado de evento inválido');
+ if(kind==='events'&&b.ministryId&&!all('ministries').some(m=>m.id===Number(b.ministryId)))throw Error('Ministerio inexistente');
+ if(kind==='ministries'&&(!Array.isArray(b.members||[])||(b.members||[]).some(id=>!all('members').some(m=>m.id===id))))throw Error('Integrantes inválidos');
+ if(kind==='donations'&&b.memberId&&!all('members').some(m=>m.id===Number(b.memberId)))throw Error('Miembro inexistente');
  if(kind==='attendance'){
  if(!all('events').some(e=>e.id===Number(b.eventId)))throw Error('Evento inexistente');
  if(!Array.isArray(b.present)||!Array.isArray(b.absent))throw Error('Lista de asistencia inválida');
@@ -41,7 +46,7 @@ const server=http.createServer(async(req,res)=>{
  const send=(code,b)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(b))};
  try{
  const url=new URL(req.url,'http://localhost'),p=url.pathname,method=req.method;
- if(!p.startsWith('/api/')){const names={'/':'index.html','/app.js':'app.js','/style.css':'style.css'};const f=names[p];if(!f){res.writeHead(404);return res.end('No encontrado')}res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html; charset=utf-8');return res.end(readFileSync(path.join(root,'public',f)))}
+ if(!p.startsWith('/api/')){const names={'/':'index.html','/app.js':'app.js','/export.js':'export.js','/style.css':'style.css'};const f=names[p];if(!f){res.writeHead(404);return res.end('No encontrado')}res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':'text/html; charset=utf-8');return res.end(readFileSync(path.join(root,'public',f)))}
  if(!['GET','HEAD'].includes(method)&&req.headers.origin&&req.headers.origin!==`http://${req.headers.host}`&&req.headers.origin!==`https://${req.headers.host}`)return send(403,{error:'Origen rechazado'});
  if(p==='/api/status')return send(200,{setup:!db.prepare('SELECT id FROM users LIMIT 1').get()});
  if(p==='/api/setup'&&method==='POST'){
@@ -75,3 +80,4 @@ const server=http.createServer(async(req,res)=>{
  }catch(e){send(400,{error:e.message.includes('UNIQUE')?'El correo ya está registrado':e.message})}
 });
 server.listen(Number(process.env.PORT)||3000,process.env.HOST||'127.0.0.1',()=>console.log('Aplicación disponible en http://localhost:'+(process.env.PORT||3000)));
+

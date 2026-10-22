@@ -36,7 +36,7 @@ La fotografía de Unsplash es ilustrativa; no representa el edificio real de Sil
 npm test
 ```
 
-La prueba crea una base temporal y verifica autenticación, permisos de los cinco roles, conservación de miembros inactivos, aportaciones y prevención de asistencias duplicadas. No modifica la base de uso real.
+La prueba de integración crea una base temporal y verifica autenticación, permisos de los cinco roles, conservación de miembros inactivos, aportaciones y prevención de asistencias duplicadas. No modifica la base de uso real.
 
 ## Respaldo
 
@@ -50,4 +50,5 @@ Subir código a GitHub **no publica el servidor**. GitHub Pages solo sirve archi
 
 ## Alcance de esta entrega
 
-Exportación para Excel mediante CSV UTF-8 y PDF mediante el diálogo de impresión del navegador. La recuperación de contraseñas genera tokens de un solo uso; el envío automático por correo requiere configurar un servicio `RESET_WEBHOOK`. Las capturas reales de pantallas permanecen pendientes de verificar la vista local en el equipo; no se incluyen imágenes simuladas como evidencia de pruebas.
+Exportación para Excel mediante archivos .xlsx y PDF mediante el diálogo de impresión del navegador. La recuperación de contraseñas genera tokens de un solo uso; el envío automático por correo requiere configurar un servicio `RESET_WEBHOOK`. Las capturas reales de pantallas permanecen pendientes de verificar la vista local en el equipo; no se incluyen imágenes simuladas como evidencia de pruebas.
+

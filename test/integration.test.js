@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 test('Autenticación, permisos, registros e historial',async()=>{
- const dir=mkdtempSync(path.join(tmpdir(),'siloe-'));const child=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:'3199',DB_PATH:path.join(dir,'test.sqlite')}});let cookie='';
+ const dir=mkdtempSync(path.join(tmpdir(),'siloe-'));const child=spawn(process.execPath,['server.js'],{env:{...process.env,PORT:'3199',DB_PATH:path.join(dir,'test.sqlite'),RESET_WEBHOOK:'',SETUP_TOKEN:''}});let cookie='',stdout='';child.stdout.on('data',d=>stdout+=d);
  try{await new Promise((resolve,reject)=>{child.stdout.once('data',resolve);child.once('error',reject);child.once('exit',()=>reject(Error('Servidor detenido')))});
  const req=async(p,method='GET',b,auth=cookie)=>{const r=await fetch('http://127.0.0.1:3199/api/'+p,{method,headers:{'Content-Type':'application/json',cookie:auth},body:b?JSON.stringify(b):undefined});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]}};
  assert.equal((await req('members')).status,401);
@@ -30,5 +30,13 @@ test('Autenticación, permisos, registros e historial',async()=>{
  }
  assert.equal((await req('members','POST',{name:'CSRF',joined:'2026-10-21'},'')).status,401);
  await req('logout','POST');assert.equal((await req('me')).status,401);
+ assert.equal((await req('forgot','POST',{email:'admin@example.test'})).status,200);
+ await new Promise(r=>setTimeout(r,30));const resetToken=/Recuperación local para admin@example.test: ([a-f0-9]+)/.exec(stdout)?.[1];assert.ok(resetToken);
+ const oldSession=await req('login','POST',{email:'admin@example.test',password:'Password12345!'});cookie=oldSession.cookie;
+ assert.equal((await req('reset','POST',{token:resetToken,password:'NewPassword12345!'})).status,200);
+ assert.equal((await req('me')).status,401);
+ assert.equal((await req('reset','POST',{token:resetToken,password:'AnotherPassword123!'})).status,400);
+ assert.equal((await req('login','POST',{email:'admin@example.test',password:'Password12345!'})).status,401);
+ assert.equal((await req('login','POST',{email:'admin@example.test',password:'NewPassword12345!'})).status,200);
  }finally{child.kill();await new Promise(r=>child.once('exit',r));rmSync(dir,{recursive:true,force:true})}
 });

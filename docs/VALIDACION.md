@@ -16,7 +16,7 @@
 
 La vista en el navegador integrado no consiguió acceder al servidor local: conexión agotada. No se certifica todavía la revisión visual, la impresión PDF ni el comportamiento móvil por una prueba de navegador. La fotografía incluida es ilustrativa, no una captura de la aplicación.
 
-El envío real de recuperación por correo requiere configurar un proveedor. La exportación para Excel es CSV, no XLSX. La asociación específica de actividades con ministerios se describe de manera textual; el calendario actual es general. No hay envío de anuncios por correo ni acceso público de miembros.
+El envío real de recuperación por correo requiere configurar un proveedor. La exportación Excel nativa fue comprobada con openpyxl. Los eventos pueden asociarse con un ministerio; el calendario principal muestra todos. No hay envío de anuncios por correo ni acceso público de miembros.
 
 ## Lista de revisión manual en el equipo
 
@@ -29,7 +29,8 @@ El envío real de recuperación por correo requiere configurar un proveedor. La 
 7. Crear ministerio y vincular miembros.
 8. Registrar aportación nominativa y anónima.
 9. Publicar, editar y eliminar comunicado.
-10. Generar CSV y PDF; probar en pantalla pequeña.
+10. Generar Excel y PDF; probar en pantalla pequeña.
 11. Capturar pantallas reales de acceso, panel, miembros, calendario y reportes para adjuntar al manual.
 
 No incluir datos personales reales, correos privados ni montos sensibles en capturas destinadas al repositorio público.
+
